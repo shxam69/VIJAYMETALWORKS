@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   motion, AnimatePresence,
   useScroll, useTransform, useInView
@@ -175,13 +175,8 @@ const setCached = (key, data) => {
 
 // localStorage persistence for user's personal state
 const getUserState = () => {
-  try {
-    const stored = localStorage.getItem('vmw_user_state');
-    return stored ? JSON.parse(stored) : { likes: {}, saves: {}, comments: {} };
-  } catch (_) {
-    localStorage.removeItem('vmw_user_state');
-    return { likes: {}, saves: {}, comments: {} };
-  }
+  const stored = localStorage.getItem('vmw_user_state');
+  return stored ? JSON.parse(stored) : { likes: {}, saves: {}, comments: {} };
 };
 
 const setUserState = (state) => {
@@ -2666,6 +2661,7 @@ const Gallery = ({ isFullPage = false, onSelect, initialSelected = null }) => {
   const [likeAnim, setLikeAnim] = useState({});
   const [loadedImages, setLoadedImages] = useState({});
   const [activeFilter, setActiveFilter] = useState('All');
+  const [authAction, setAuthAction] = useState('');
   const [comments, setComments] = useState(userState.comments);
   const [commentInput, setCommentInput] = useState('');
   const [showComments, setShowComments] = useState(false);
@@ -2676,47 +2672,46 @@ const Gallery = ({ isFullPage = false, onSelect, initialSelected = null }) => {
   const [mouseX, setMouseX] = useState(null);
   const DOCK_ITEM_W = 68;
 
-  // FIX: Fetch admin-uploaded items from Supabase with proper cancellation
+  // Fetch any admin-uploaded items from Supabase and merge with seeded GALLERY_IDOLS
   useEffect(() => {
     const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
     const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
     if (!supabaseUrl || !supabaseKey) return;
-    let cancelled = false;
     fetch(`${supabaseUrl}/rest/v1/gallery_items?select=*&order=created_at.desc`, {
       headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
     })
     .then(r => r.ok ? r.json() : [])
     .then(rows => {
-      if (cancelled) return;
-      const valid = (rows || []).filter(r => r.image_url && r.image_url.length > 0);
-      const mapped = valid.map(r => ({
-        id: r.id, gid: r.id,
-        deity: r.title, metal: r.metal_type,
-        purity: '', dims: '', stone: '', duration: '',
-        origin: 'Sowcarpet', img: r.image_url,
-        cat: r.category, artisanNotes: '', _isUploaded: true,
+      // Only include uploaded items (gid starts with 'vmw-upload-') as live additions
+      const uploadedOnly = rows.filter(r => r.id.startsWith('vmw-upload-'));
+      const mapped = uploadedOnly.map((r, idx) => ({
+        id: 10000 + idx,  // unique numeric id outside GALLERY_IDOLS range
+        gid: r.id,
+        deity: r.title,
+        metal: r.metal_type,
+        purity: '',
+        dims: '',
+        stone: '',
+        duration: '',
+        origin: 'Sowcarpet',
+        img: r.image_url,
+        cat: r.category,
+        artisanNotes: '',
+        _isUploaded: true,
       }));
       setLiveItems(mapped);
     })
     .catch(() => {});
-    return () => { cancelled = true; };
   }, []);
 
-  // FIX: Merge with deduplication — uploaded items may share images with static seeds
-  const allIdols = useMemo(() => {
-    const uploadedUrls = new Set(liveItems.map(i => i.img));
-    const staticOnly = GALLERY_IDOLS.filter(i => !uploadedUrls.has(i.img));
-    return [...staticOnly, ...liveItems];
-  }, [liveItems]);
+  // Merged idol list: seeded + uploaded
+  const allIdols = [...GALLERY_IDOLS, ...liveItems];
 
   const FILTERS = ['All','Gold Work','Crown Work','Silver Work','Stone Work','Vigraham'];
 
-  // FIX: useMemo — prevents new array ref every render which caused infinite loops downstream
-  const filteredIdols = useMemo(() =>
-    activeFilter === 'All'
-      ? allIdols
-      : allIdols.filter(i => i.cat === activeFilter || i.metal.toLowerCase().includes(activeFilter.toLowerCase().split(' ')[0])),
-  [allIdols, activeFilter]);
+  const filteredIdols = activeFilter === 'All'
+    ? allIdols
+    : allIdols.filter(i => i.cat === activeFilter || i.metal.toLowerCase().includes(activeFilter.toLowerCase().split(' ')[0]));
 
   const getDockScale = idx => {
     if (mouseX===null) return 1;
@@ -2782,9 +2777,7 @@ const Gallery = ({ isFullPage = false, onSelect, initialSelected = null }) => {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  // FIX: Use filteredIdols.length as dep instead of the array itself
-  // The effect only cares about whether `selected` still exists in the list
-  }, [selected, filteredIdols.length]);
+  }, [selected, filteredIdols]);
 
   const handlePrev = (e) => {
     e.stopPropagation();
@@ -4356,35 +4349,8 @@ const GalleryPreview = ({ onViewAll }) => {
   const C = useTheme();
   const navigate = useNavigate();
   const { setShowCommissionModal } = useAppCtx();
-  // FIX: Fetch featured items from Supabase (admin uploads) and merge with static items
-  const [liveItems, setLiveItems] = useState([]);
-  useEffect(() => {
-    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-    const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) return;
-    let cancelled = false;
-    fetch(`${supabaseUrl}/rest/v1/gallery_items?is_featured=eq.true&select=*&order=created_at.desc`, {
-      headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
-    })
-    .then(r => r.ok ? r.json() : [])
-    .then(rows => {
-      if (cancelled) return;
-      const valid = (rows || []).filter(r => r.image_url && r.image_url.length > 0);
-      setLiveItems(valid.map(r => ({
-        id: r.id, gid: r.id,
-        deity: r.title, metal: r.metal_type,
-        cat: r.category, img: r.image_url,
-        artisanNotes: r.artisan_notes || '',  // FIX: include artisan notes from DB
-        _isUploaded: true,
-      })));
-    })
-    .catch(() => {});
-    return () => { cancelled = true; };
-  }, []);
-  // If there are featured uploaded items, show them first; otherwise use static seed
-  const featured = liveItems.length > 0
-    ? [...liveItems, ...GALLERY_IDOLS].slice(0, 6)
-    : GALLERY_IDOLS.slice(0, 6);
+  // Show only 4-6 featured items
+  const featured = GALLERY_IDOLS.slice(0, 6);
   const [hov, setHov] = useState(null);
 
   return (
@@ -4499,55 +4465,12 @@ const ImmersiveFeed = () => {
   const [immersiveMode, setImmersiveMode] = useState(initialId !== undefined && initialId !== null);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-
-  // FIX: Fetch admin-uploaded items from Supabase and merge with static GALLERY_IDOLS
-  // This ensures uploads from the admin dashboard appear in the gallery immediately
-  const [liveItems, setLiveItems] = useState([]);
-  useEffect(() => {
-    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-    const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-    if (!supabaseUrl || !supabaseKey) return;
-    let cancelled = false;
-    fetch(`${supabaseUrl}/rest/v1/gallery_items?select=*&order=created_at.desc`, {
-      headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
-    })
-    .then(r => r.ok ? r.json() : [])
-    .then(rows => {
-      if (cancelled) return;
-      const valid = (rows || []).filter(r => r.image_url && r.image_url.length > 0);
-      const mapped = valid.map(r => ({
-        id: r.id, gid: r.id,
-        deity: r.title, metal: r.metal_type,
-        purity: '', dims: '', stone: '', duration: '',
-        origin: 'Sowcarpet', img: r.image_url,
-        cat: r.category,
-        artisanNotes: r.artisan_notes || '',  // FIX: include artisan notes from DB
-        _isUploaded: true,
-      }));
-      setLiveItems(mapped);
-    })
-    .catch(() => {});
-    return () => { cancelled = true; };
-  }, []); // runs once on mount; admin panel changes are picked up on next page load
-
-  // Merge static + live items; deduplicate by image URL so seeded items never show twice
-  const allIdols = useMemo(() => {
-    const uploadedUrls = new Set(liveItems.map(i => i.img));
-    const staticOnly = GALLERY_IDOLS.filter(i => !uploadedUrls.has(i.img));
-    return [...staticOnly, ...liveItems];
-  }, [liveItems]);
-
-  // FIX: useMemo prevents a new array reference on every render, which was causing
-  // the useEffect(,[activeIdx, filteredIdols]) to fire infinitely → screen freeze
-  const filteredIdols = useMemo(() => {
-    const q = (searchQuery || '').toLowerCase();
-    if (!q) return allIdols;
-    return allIdols.filter(i =>
-      i.deity.toLowerCase().includes(q) ||
-      i.cat.toLowerCase().includes(q) ||
-      i.metal.toLowerCase().includes(q)
-    );
-  }, [allIdols, searchQuery]);
+  
+  const filteredIdols = GALLERY_IDOLS.filter(i => 
+    i.deity.toLowerCase().includes(searchQuery?.toLowerCase() || '') || 
+    i.cat.toLowerCase().includes(searchQuery?.toLowerCase() || '') ||
+    i.metal.toLowerCase().includes(searchQuery?.toLowerCase() || '')
+  );
   
   const initialIdx = initialId !== undefined ? filteredIdols.findIndex(i => i.id === initialId) : 0;
   const [activeIdx, setActiveIdx] = useState(Math.max(0, initialIdx));
@@ -4555,19 +4478,18 @@ const ImmersiveFeed = () => {
   const didScrollRef = useRef(false);
 
   // Scroll to the correct photo immediately on mount — use requestAnimationFrame to ensure DOM is ready
-  const activeIdxRef = useRef(activeIdx);
   useEffect(() => {
     if (!immersiveMode || didScrollRef.current) return;
     const scrollToIdx = () => {
       if (containerRef.current) {
-        containerRef.current.scrollTop = activeIdxRef.current * window.innerHeight;
+        containerRef.current.scrollTop = activeIdx * window.innerHeight;
         didScrollRef.current = true;
       } else {
         requestAnimationFrame(scrollToIdx);
       }
     };
     requestAnimationFrame(scrollToIdx);
-  }, [immersiveMode]); // intentionally runs only when immersiveMode changes
+  }, [immersiveMode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load user state from localStorage + initialize with real counts
   const userState = getUserState();
@@ -4591,132 +4513,136 @@ const ImmersiveFeed = () => {
   const userId = user?.id || 'guest';
 
   // Load real counts for active item
-  // FIX: Depend on idol.id (primitive) not filteredIdols (new array ref each render)
-  // and extract isLoggedIn/userId as stable refs to avoid re-firing on auth changes
-  const activeIdolId = filteredIdols[activeIdx]?.id ?? null;
-  const isLoggedInRef = useRef(isLoggedIn);
-  const userIdRef = useRef(userId);
-  useEffect(() => { isLoggedInRef.current = isLoggedIn; }, [isLoggedIn]);
-  useEffect(() => { userIdRef.current = userId; }, [userId]);
-
   useEffect(() => {
-    if (!activeIdolId) return;
-    let cancelled = false;
-
+    if (!filteredIdols[activeIdx]) return;
+    const idol = filteredIdols[activeIdx];
+    
     (async () => {
-      const count = await getIdolLikesCount(activeIdolId);
-      if (!cancelled) setLikesCounts(p => ({...p, [activeIdolId]: count}));
+      const count = await getIdolLikesCount(idol.id);
+      setLikesCounts(p => ({...p, [idol.id]: count}));
     })();
-
+    
     (async () => {
-      const count = await getIdolSavesCount(activeIdolId);
-      if (!cancelled) setSavesCounts(p => ({...p, [activeIdolId]: count}));
+      const count = await getIdolSavesCount(idol.id);
+      setSavesCounts(p => ({...p, [idol.id]: count}));
     })();
-
+    
     (async () => {
-      const data = await getIdolComments(activeIdolId);
-      if (!cancelled) setRealComments(p => ({...p, [activeIdolId]: data}));
+      const data = await getIdolComments(idol.id);
+      setRealComments(p => ({...p, [idol.id]: data}));
     })();
-
-    if (isLoggedInRef.current) {
-      logViewEvent(activeIdolId, userIdRef.current);
+    
+    if (isLoggedIn) {
+      logViewEvent(idol.id, userId);
     }
+  }, [activeIdx, filteredIdols, isLoggedIn, userId]);
 
-    return () => { cancelled = true; };
-  }, [activeIdolId]); // only re-fire when the active item actually changes
-
-  // FIX: Memoize scroll handler — prevents new function ref on every render
-  const filteredIdolsLengthRef = useRef(filteredIdols.length);
-  useEffect(() => { filteredIdolsLengthRef.current = filteredIdols.length; }, [filteredIdols.length]);
-
-  const handleScroll = useCallback((e) => {
+  const handleScroll = (e) => {
     const container = e.target;
     const itemHeight = window.innerHeight;
     const index = Math.round(container.scrollTop / itemHeight);
-    if (index !== activeIdx && index >= 0 && index < filteredIdolsLengthRef.current) {
+    if (index !== activeIdx && index >= 0 && index < filteredIdols.length) {
       setActiveIdx(index);
-      setShowComments(false);
+      setShowComments(false); 
       setShowDetailPanel(false);
       setShowShareMenu(false);
     }
-  }, [activeIdx]); // only activeIdx is read from closure
+  };
 
-  // FIX: Stable reference for handleInteraction — reads isLoggedIn from ref
-  const handleInteraction = useCallback((actionType) => {
-    if (!isLoggedInRef.current) {
+  const handleInteraction = (actionType) => {
+    if (!isLoggedIn) {
       setAuthAction(actionType);
       setShowAuthModal(true);
       return false;
     }
     return true;
-  }, [setAuthAction, setShowAuthModal]); // context setters are stable
+  };
 
-  const toggleLike = useCallback((id) => {
+  const toggleLike = (id) => {
     if (handleInteraction('like')) {
       const isCurrentlyLiked = liked[id];
-      // FIX: Update React state optimistically
       setLiked(p => ({...p, [id]: !isCurrentlyLiked}));
-      // FIX: Update display count optimistically
+      
+      // Update display count
       setLikesCounts(p => ({
-        ...p,
-        [id]: Math.max(0, (p[id] || 0) + (isCurrentlyLiked ? -1 : 1))
+        ...p, 
+        [id]: (p[id] || 0) + (isCurrentlyLiked ? -1 : 1)
       }));
-      // FIX: toggleIdolLike already handles localStorage + Supabase — don't double-write
+      
+      // Persist to localStorage and Supabase
       toggleIdolLike(id, userId, isCurrentlyLiked);
+      
+      // Update localStorage
+      const state = getUserState();
+      state.likes[id] = !isCurrentlyLiked;
+      setUserState(state);
     }
-  }, [liked, userId]); // stable deps — no filteredIdols reference
+  };
 
-  const toggleSave = useCallback((id) => {
+  const toggleSave = (id) => {
     if (handleInteraction('save')) {
       const isCurrentlySaved = saved[id];
-      // FIX: Update React state optimistically
       setSaved(p => ({...p, [id]: !isCurrentlySaved}));
-      // FIX: Update display count optimistically
+      
+      // Update display count
       setSavesCounts(p => ({
         ...p,
-        [id]: Math.max(0, (p[id] || 0) + (isCurrentlySaved ? -1 : 1))
+        [id]: (p[id] || 0) + (isCurrentlySaved ? -1 : 1)
       }));
+      
       if (!isCurrentlySaved) {
         setSaveAnimMsg(true);
         setTimeout(() => setSaveAnimMsg(false), 2000);
       }
-      // FIX: toggleIdolSave already handles localStorage + Supabase — don't double-write
+      
+      // Persist to localStorage and Supabase
       toggleIdolSave(id, userId, isCurrentlySaved);
+      
+      // Update localStorage
+      const state = getUserState();
+      state.saves[id] = !isCurrentlySaved;
+      setUserState(state);
     }
-  }, [saved, userId]); // stable deps — no filteredIdols reference
+  };
 
-  const postComment = useCallback((id) => {
+  const postComment = (id) => {
     if (!handleInteraction('comment')) return;
     if (!commentInput.trim()) return;
+    
     const text = commentInput.trim();
-    const username = userIdRef.current !== 'guest' ? (userIdRef.current?.split?.('@')[0] || 'Guest') : 'Guest';
-    // FIX: Optimistic UI update only — addIdolComment handles localStorage + Supabase
+    const username = user?.email?.split('@')[0] || 'Anonymous';
+    
+    // Optimistic UI update
     setComments(p => ({
       ...p,
-      [id]: [...(p[id] || []), {
-        text, user: username, time: 'Just now', id: 'temp_' + Date.now()
+      [id]: [...(p[id]||[]), { 
+        text, 
+        user: username, 
+        time: 'Just now',
+        id: 'temp_' + Date.now()
       }]
     }));
-    addIdolComment(id, userIdRef.current, text);
+    
+    // Persist to localStorage and Supabase
+    addIdolComment(id, userId, text);
     setCommentInput('');
-  }, [commentInput, handleInteraction]); // stable refs used for userId
-
-  // FIX: Use a ref for liked so double-tap callback is always stable (no stale closure)
-  const likedRef = useRef(liked);
-  useEffect(() => { likedRef.current = liked; }, [liked]);
+  };
 
   const handleDoubleTap = useCallback((id) => {
-    // Show glow animation regardless of login state
+    // Double tap should always show the glow animation regardless of login
     setDoubleTapGlow(true);
     setTimeout(() => setDoubleTapGlow(false), 800);
-    // Only like if logged in AND not already liked (prevent double-fire)
-    if (isLoggedInRef.current && !likedRef.current[id]) {
-      setLiked(p => ({...p, [id]: true}));
-      setLikesCounts(p => ({...p, [id]: (p[id] || 0) + 1}));
-      // toggleIdolLike handles localStorage + Supabase
-      toggleIdolLike(id, userIdRef.current, false);
+    // Only update like state if logged in
+    if (isLoggedIn) {
+      if (!liked[id]) {
+        setLiked(p => ({...p, [id]: true}));
+        toggleIdolLike(id, userId, false);
+        const state = getUserState();
+        state.likes[id] = true;
+        setUserState(state);
+      }
     }
-  }, []); // empty deps — reads from refs, never stale
+  }, [isLoggedIn, liked, userId]);
 
   const activeItem = filteredIdols[activeIdx];
 
@@ -4744,505 +4670,171 @@ const ImmersiveFeed = () => {
   );
 
   return (
-    <div style={{
-      position: 'fixed',
-      inset: 0,
-      background: '#050402',
-      // NO overflow:hidden — this traps scroll inside child containers
-      color: '#fff',
-      zIndex: 2000,
-    }}>
-      {/* Floating Search Bar — solid background on mobile avoids GPU-intensive backdrop-filter on scroll */}
-      <motion.div
-        initial={{ y: -80, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-        transition={{ type: 'spring', damping: 22, stiffness: 120, delay: 0.1 }}
-        style={{
-          position: 'fixed',
-          top: 'env(safe-area-inset-top, 0px)',
-          left: 0, right: 0,
-          zIndex: 160,
-          display: 'flex',
-          justifyContent: 'center',
-          padding: '10px 16px 6px',
-          // Solid background is faster on mobile than blur — same visual result
-          background: 'linear-gradient(to bottom, rgba(5,4,2,0.97) 60%, transparent 100%)',
-          pointerEvents: isSearchOpen || !immersiveMode ? 'auto' : 'none',
-        }}
+    <div style={{ position: 'fixed', inset: 0, background: '#050402', overflow: 'hidden', color: '#fff', zIndex: 2000 }}>
+      {/* Floating Search UI */}
+      <motion.div 
+        initial={{ y: -100 }} animate={{ y: 0 }} transition={{ type: 'spring', damping: 20, stiffness: 100 }}
+        style={{ position: 'absolute', top: 24, left: 20, right: 20, zIndex: 50, display: 'flex', justifyContent: 'center' }}
       >
-        <div style={{
-          background: isSearchOpen ? 'rgba(22,18,14,0.96)' : 'rgba(22,18,14,0.7)',
-          border: `1px solid ${isSearchOpen ? 'rgba(255,215,0,0.4)' : 'rgba(255,215,0,0.15)'}`,
-          borderRadius: 28,
-          display: 'flex',
-          alignItems: 'center',
-          padding: '9px 16px',
-          width: isSearchOpen ? '100%' : 'auto',
-          maxWidth: 520,
-          transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-          gap: 8,
+        <div style={{ 
+          background: 'rgba(20, 18, 16, 0.45)', backdropFilter: 'blur(24px)', 
+          border: '1px solid rgba(255,215,0,0.15)', borderRadius: 30,
+          display: 'flex', alignItems: 'center', padding: '10px 20px', width: isSearchOpen ? '100%' : 'auto',
+          maxWidth: 480, transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.05)'
         }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,215,0,0.7)" strokeWidth="2" style={{ flexShrink: 0, cursor: 'pointer' }} onClick={() => setIsSearchOpen(true)}>
-            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-          </svg>
-          {isSearchOpen ? (
-            <>
-              <input
-                autoFocus
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search deity, metal, category…"
-                style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', flex: 1, fontFamily: "'Jost', sans-serif", fontSize: 14, letterSpacing: '0.04em', minWidth: 0 }}
-                onBlur={() => !searchQuery && setIsSearchOpen(false)}
-              />
-              {searchQuery && (
-                <button onClick={() => { setSearchQuery(''); setIsSearchOpen(false); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 18, cursor: 'pointer', padding: 0, lineHeight: 1, flexShrink: 0, touchAction: 'manipulation' }}>×</button>
-              )}
-            </>
-          ) : (
-            <span onClick={() => setIsSearchOpen(true)} style={{ fontFamily: "'Jost', sans-serif", fontSize: 12, color: 'rgba(255,215,0,0.6)', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}>Search</span>
+          <span style={{ fontSize: 18, marginRight: 10, cursor: 'pointer', opacity: 0.8 }} onClick={() => setIsSearchOpen(true)}>🔍</span>
+          {isSearchOpen && (
+            <motion.input 
+              initial={{ width: 0, opacity: 0 }} animate={{ width: '100%', opacity: 1 }}
+              autoFocus
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search deity, metal, category..."
+              style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', width: '100%', fontFamily: "'Jost', sans-serif", fontSize: 14, letterSpacing: '0.05em' }}
+              onBlur={() => !searchQuery && setIsSearchOpen(false)}
+            />
           )}
         </div>
       </motion.div>
 
       {!immersiveMode ? (
-        /* ═══════════════════════════════════════════════════════
-           PREMIUM MASONRY GALLERY
-           Mobile-first: 2 col on phones, 3 col on tablets/desktop
-           Pinterest + Luxury Portfolio aesthetic on ALL devices
-        ═══════════════════════════════════════════════════════ */
-        <div style={{
-          height: '100vh',
-          width: '100vw',
-          overflowY: 'auto',
-          WebkitOverflowScrolling: 'touch', // iOS momentum scroll
-          overscrollBehavior: 'contain',
-          paddingTop: 80, // space for floating search bar
-          paddingBottom: 100, // space for bottom nav
-          boxSizing: 'border-box',
-        }}>
-          <style>{`
-            /* ── Masonry grid ── */
-            .vmw-masonry {
-              column-count: 2;
-              column-gap: 8px;
-              padding: 0 10px 16px;
-              margin: 0 auto;
-            }
-            @media (min-width: 600px) {
-              .vmw-masonry {
-                column-count: 3;
-                column-gap: 12px;
-                padding: 0 16px 24px;
-                max-width: 900px;
-              }
-            }
-            @media (min-width: 1024px) {
-              .vmw-masonry {
-                column-count: 3;
-                column-gap: 20px;
-                padding: 0 32px 40px;
-                max-width: 1400px;
-              }
-            }
-            @media (min-width: 1400px) {
-              .vmw-masonry {
-                column-count: 4;
-                column-gap: 24px;
-                max-width: 1600px;
-              }
-            }
-
-            /* ── Masonry card ── */
-            .vmw-card {
-              break-inside: avoid;
-              -webkit-column-break-inside: avoid;
-              margin-bottom: 8px;
-              position: relative;
-              border-radius: 10px;
-              overflow: hidden;
-              cursor: pointer;
-              border: 1px solid rgba(255,215,0,0.12);
-              background: rgba(14,11,8,0.8);
-              display: block;
-              /* GPU compositing layer — prevents paint thrashing on scroll */
-              will-change: transform;
-              transform: translateZ(0);
-            }
-            @media (min-width: 600px) {
-              .vmw-card { margin-bottom: 12px; border-radius: 12px; }
-            }
-            @media (min-width: 1024px) {
-              .vmw-card { margin-bottom: 20px; border-radius: 16px; }
-            }
-
-            /* ── Card image ── */
-            .vmw-card img {
-              width: 100%;
-              display: block;
-              /* Natural aspect ratio — no crop, no stretch */
-              height: auto;
-              object-fit: cover;
-              /* Slight warmth filter matching the luxury aesthetic */
-              filter: sepia(5%) brightness(0.96);
-              transition: transform 0.6s ease, filter 0.4s ease;
-            }
-            /* Hover only on pointer devices — no ghost hover on mobile */
-            @media (hover: hover) {
-              .vmw-card:hover { border-color: rgba(255,215,0,0.4); }
-              .vmw-card:hover img { transform: scale(1.06); filter: sepia(8%) brightness(1.02); }
-            }
-            /* Touch active state for mobile */
-            .vmw-card:active { opacity: 0.88; }
-
-            /* ── Card overlay text ── */
-            .vmw-card-overlay {
-              position: absolute;
-              bottom: 0; left: 0; right: 0;
-              background: linear-gradient(to top, rgba(5,3,1,0.96) 0%, rgba(0,0,0,0.5) 55%, transparent 100%);
-              padding: 28px 12px 12px;
-              pointer-events: none;
-            }
-            @media (min-width: 600px) {
-              .vmw-card-overlay { padding: 36px 16px 14px; }
-            }
-            @media (min-width: 1024px) {
-              .vmw-card-overlay { padding: 44px 20px 18px; }
-            }
-
-            /* ── Card title ── */
-            .vmw-card-title {
-              font-family: 'Cinzel', serif;
-              font-size: 12px;
-              font-weight: 600;
-              color: #FFD700;
-              margin: 0 0 3px;
-              text-shadow: 0 1px 6px rgba(0,0,0,0.9);
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-            }
-            @media (min-width: 600px) { .vmw-card-title { font-size: 14px; } }
-            @media (min-width: 1024px) { .vmw-card-title { font-size: 17px; margin-bottom: 5px; } }
-
-            /* ── Card subtitle ── */
-            .vmw-card-sub {
-              font-family: 'Jost', sans-serif;
-              font-size: 8px;
-              font-weight: 600;
-              color: rgba(255,255,255,0.6);
-              text-transform: uppercase;
-              letter-spacing: 0.12em;
-              margin: 0;
-            }
-            @media (min-width: 600px) { .vmw-card-sub { font-size: 9px; } }
-            @media (min-width: 1024px) { .vmw-card-sub { font-size: 11px; } }
-
-            /* ── Metal badge ── */
-            .vmw-card-badge {
-              position: absolute;
-              top: 10px; left: 10px;
-              padding: 3px 7px;
-              background: rgba(0,0,0,0.55);
-              backdrop-filter: blur(6px);
-              -webkit-backdrop-filter: blur(6px);
-              border: 1px solid rgba(255,215,0,0.3);
-              border-radius: 4px;
-              color: #FFD700;
-              font-family: 'Jost', sans-serif;
-              font-size: 7px;
-              font-weight: 700;
-              letter-spacing: 0.14em;
-              text-transform: uppercase;
-              pointer-events: none;
-              /* Limit badge length on narrow cards */
-              max-width: calc(100% - 20px);
-              white-space: nowrap;
-              overflow: hidden;
-              text-overflow: ellipsis;
-            }
-            @media (min-width: 600px) { .vmw-card-badge { font-size: 8px; padding: 4px 8px; top: 12px; left: 12px; } }
-            @media (min-width: 1024px) { .vmw-card-badge { font-size: 9px; padding: 5px 10px; top: 14px; left: 14px; } }
-
-            /* ── Empty state ── */
-            .vmw-empty {
-              grid-column: 1 / -1;
-              text-align: center;
-              padding: 80px 24px;
-              color: rgba(255,255,255,0.3);
-              font-family: 'Cormorant Garamond', serif;
-              font-size: 20px;
-              font-style: italic;
-            }
-
-            /* ── Masonry section heading ── */
-            .vmw-gallery-heading {
-              text-align: center;
-              padding: 8px 16px 24px;
-            }
-            .vmw-gallery-heading h1 {
-              font-family: 'Cinzel', serif;
-              font-size: clamp(22px, 6vw, 48px);
-              color: #FFD700;
-              margin: 0 0 6px;
-              font-weight: 700;
-              letter-spacing: 0.04em;
-            }
-            .vmw-gallery-heading p {
-              font-family: 'Cormorant Garamond', serif;
-              font-size: clamp(13px, 3vw, 16px);
-              color: rgba(255,255,255,0.55);
-              font-style: italic;
-              margin: 0;
-            }
-          `}</style>
-
-          {/* Gallery heading */}
-          <div className="vmw-gallery-heading">
-            <h1>Sacred Craftsmanship</h1>
-            <p>Handcrafted temple metalwork · Sowcarpet, Chennai · Est. 1915</p>
-          </div>
-
-          {/* Masonry grid */}
-          <div className="vmw-masonry" style={{ margin: '0 auto' }}>
-            {filteredIdols.length === 0 ? (
-              <div className="vmw-empty">No masterpieces found for "{searchQuery}"</div>
-            ) : (
-              filteredIdols.map((idol, i) => (
-                <div
-                  key={idol.gid || idol.id}
-                  className="vmw-card"
-                  onClick={() => {
-                    setActiveIdx(i);
-                    didScrollRef.current = false;
-                    setImmersiveMode(true);
-                  }}
-                >
-                  {/* Lazy-loaded image preserving natural aspect ratio */}
-                  <img
-                    src={idol.img}
-                    alt={idol.deity}
-                    loading="lazy"
-                    decoding="async"
-                  />
-
-                  {/* Gradient overlay + text */}
-                  <div className="vmw-card-overlay">
-                    <div className="vmw-card-title">{idol.deity}</div>
-                    <p className="vmw-card-sub">{idol.cat}</p>
-                  </div>
-
-                  {/* Metal badge */}
-                  <div className="vmw-card-badge">{idol.metal}</div>
+        /* PART 1: PREMIUM MASONRY GALLERY */
+        <div style={{ height: '100vh', width: '100vw', overflowY: 'auto', padding: '100px 24px 120px 24px' }}>
+          <div style={{ maxWidth: 1400, margin: '0 auto', columns: '3 300px', columnGap: 24 }}>
+            {filteredIdols.map((idol, i) => (
+              <motion.div 
+                key={idol.id}
+                initial={{ opacity: 0, y: 40 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ duration: 0.8, delay: (i % 6) * 0.1, ease: [0.16, 1, 0.3, 1] }}
+                onClick={() => { 
+                  const idx = filteredIdols.indexOf(idol);
+                  setActiveIdx(idx); 
+                  didScrollRef.current = false;
+                  setImmersiveMode(true); 
+                }}
+                style={{ 
+                  breakInside: 'avoid', marginBottom: 24, position: 'relative', borderRadius: 16, overflow: 'hidden', cursor: 'pointer',
+                  border: '1px solid rgba(255,255,255,0.05)', background: 'rgba(255,255,255,0.02)'
+                }}
+                className="masonry-item-hover"
+              >
+                <motion.img 
+                  src={idol.img} alt={idol.deity} 
+                  style={{ width: '100%', display: 'block', objectFit: 'cover' }}
+                  whileHover={{ scale: 1.05 }} transition={{ duration: 0.6, ease: "easeOut" }}
+                />
+                <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, transparent 50%)', pointerEvents: 'none' }} />
+                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 20, pointerEvents: 'none' }}>
+                  <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 18, margin: '0 0 4px 0', color: '#FFD700' }}>{idol.deity}</h3>
+                  <p style={{ fontFamily: "'Jost', sans-serif", fontSize: 12, margin: 0, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{idol.metal} • {idol.cat}</p>
                 </div>
-              ))
-            )}
+              </motion.div>
+            ))}
           </div>
+          {filteredIdols.length === 0 && (
+            <div style={{ height: '50vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.5)', fontFamily: "'Jost', sans-serif", fontSize: 16 }}>
+              No masterpieces found matching "{searchQuery}"
+            </div>
+          )}
         </div>
       ) : (
-        /* ═══════════════════════════════════════════════════════
-           IMMERSIVE FULLSCREEN VIEWER
-           Instagram/TikTok style — fires ONLY when card clicked
-        ═══════════════════════════════════════════════════════ */
-        <div
+        /* PART 2: IMMERSIVE FULLSCREEN VIEWER */
+        <div 
           ref={containerRef}
           onScroll={handleScroll}
-          style={{
-            position: 'fixed', // fixed on mobile prevents body scroll interference
-            inset: 0,
-            overflowY: 'scroll',
-            overflowX: 'hidden',
-            scrollSnapType: 'y mandatory',
-            // NO scrollBehavior:'smooth' — it conflicts with scroll snapping on iOS
-            WebkitOverflowScrolling: 'touch',
-            touchAction: 'pan-y', // iOS needs explicit touch-action for snap scroll
-            overscrollBehavior: 'none',
-          }}
+          style={{ height: '100vh', width: '100vw', overflowY: 'scroll', scrollSnapType: 'y mandatory', scrollBehavior: 'smooth', WebkitOverflowScrolling: 'touch' }}
         >
-          {/* Back button — mobile safe area aware */}
-          <motion.button
-            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}
-            onClick={() => {
-              setImmersiveMode(false);
-              setShowDetailPanel(false);
-              setShowComments(false);
-              setShowShareMenu(false);
-            }}
-            style={{
-              position: 'fixed',
-              top: 'calc(env(safe-area-inset-top, 16px) + 16px)',
-              left: 16,
-              zIndex: 200,
-              background: 'rgba(0,0,0,0.55)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255,215,0,0.3)',
-              borderRadius: '50%',
-              width: 44, height: 44,
-              color: '#FFD700',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              touchAction: 'manipulation',
-            }}
+          {/* Back button to Masonry */}
+          <motion.button 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+            onClick={() => setImmersiveMode(false)}
+            style={{ position: 'fixed', top: 32, left: 24, zIndex: 100, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,215,0,0.3)', borderRadius: '50%', width: 44, height: 44, color: '#FFD700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           >
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 12H5M12 19l-7-7 7-7"/>
-            </svg>
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 12H5M12 19l-7-7 7-7"/></svg>
           </motion.button>
 
           {filteredIdols.map((idol, idx) => (
-            <div
-              key={idol.gid || idol.id}
-              onDoubleClick={() => handleDoubleTap(idol.gid)}
-              style={{
-                height: '100dvh', // dynamic viewport height — fixes iOS Safari chrome offset
-                width: '100vw',
-                scrollSnapAlign: 'start',
-                scrollSnapStop: 'always', // forces one-at-a-time snap
-                position: 'relative',
-                overflow: 'hidden',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-              }}
-            >
-              {/* Background blur — pointerEvents:none prevents gesture steal */}
-              <img
-                src={idol.img}
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(50px) brightness(0.22)', transform: 'scale(1.15)', pointerEvents: 'none' }}
-                alt=""
-                loading={Math.abs(idx - activeIdx) > 2 ? 'lazy' : 'eager'}
+            <div key={idol.id} onDoubleClick={() => handleDoubleTap(idol.id)} style={{ height: '100vh', width: '100vw', scrollSnapAlign: 'start', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {/* Background Blurred Depth Image */}
+              <img src={idol.img} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(50px) brightness(0.25)', transform: 'scale(1.2)' }} alt="" />
+              
+              {/* Main Cinema Image Constrained */}
+              <motion.img 
+                src={idol.img} alt={idol.deity} 
+                initial={{ scale: 1.05 }}
+                animate={{ scale: idx === activeIdx ? 1 : 1.05 }}
+                transition={{ duration: 1.5, ease: [0.16, 1, 0.3, 1] }}
+                style={{ position: 'relative', maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', zIndex: 1, filter: 'drop-shadow(0 20px 40px rgba(0,0,0,0.9))', borderRadius: 8 }} 
               />
-
-              {/* Main cinema image — contained, never cropped */}
-              <motion.img
-                src={idol.img}
-                alt={idol.deity}
-                loading={Math.abs(idx - activeIdx) > 2 ? 'lazy' : 'eager'}
-                initial={{ scale: 1.04 }}
-                animate={{ scale: idx === activeIdx ? 1 : 1.04 }}
-                transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
-                style={{
-                  position: 'relative',
-                  maxWidth: 'min(88vw, 540px)',
-                  maxHeight: 'min(72vh, 640px)',
-                  width: 'auto',
-                  height: 'auto',
-                  objectFit: 'contain',
-                  zIndex: 1,
-                  filter: 'drop-shadow(0 16px 40px rgba(0,0,0,0.92))',
-                  borderRadius: 10,
-                  pointerEvents: 'none',
-                }}
-              />
-
-              {/* Double-tap glow — pointerEvents:none */}
+              
+              {/* Double Tap Animation Overlay */}
               <AnimatePresence>
                 {doubleTapGlow && idx === activeIdx && (
                   <motion.div
-                    initial={{ scale: 0.5, opacity: 0 }}
-                    animate={{ scale: 1.4, opacity: 1 }}
-                    exit={{ scale: 2, opacity: 0 }}
-                    transition={{ duration: 0.7, ease: 'easeOut' }}
+                    initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1.5, opacity: 1 }} exit={{ scale: 2, opacity: 0 }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
                     style={{ position: 'absolute', zIndex: 10, display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none' }}
                   >
-                    <IconHeart filled />
-                    <div style={{ position: 'absolute', inset: -24, background: 'radial-gradient(circle, rgba(255,215,0,0.55) 0%, transparent 70%)', filter: 'blur(12px)', pointerEvents: 'none' }} />
+                    <IconHeart filled={true} />
+                    <div style={{ position: 'absolute', inset: -20, background: 'radial-gradient(circle, rgba(255,215,0,0.6) 0%, transparent 70%)', filter: 'blur(10px)' }} />
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              {/* Saved toast — pointerEvents:none */}
+              {/* Saved Animation Overlay */}
               <AnimatePresence>
                 {saveAnimMsg && idx === activeIdx && (
-                  <motion.div
-                    initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}
-                    style={{ position: 'absolute', top: '18%', background: 'rgba(255,215,0,0.14)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1px solid rgba(255,215,0,0.5)', color: '#FFD700', padding: '10px 20px', borderRadius: 28, zIndex: 50, fontFamily: "'Jost', sans-serif", fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'none' }}
-                  >
-                    <IconBookmark filled /> Saved to Collection
+                  <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} style={{ position: 'absolute', top: '20%', background: 'rgba(255,215,0,0.15)', backdropFilter: 'blur(12px)', border: '1px solid rgba(255,215,0,0.5)', color: '#FFD700', padding: '12px 24px', borderRadius: 30, zIndex: 50, fontFamily: "'Jost', sans-serif", fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <IconBookmark filled={true}/> Saved to Collection
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              {/* Bottom gradient — pointerEvents:none */}
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.25) 45%, transparent 100%)', pointerEvents: 'none', zIndex: 2 }} />
-
-              {/* LEFT: Title + subtitle + View More */}
-              <div style={{
-                position: 'absolute',
-                bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
-                left: 16,
-                right: 80, // leave room for right-side action buttons
-                zIndex: 3,
-                pointerEvents: 'auto', // buttons need to be tappable
-              }}>
-                <motion.div
-                  initial={{ opacity: 0, x: -24 }}
-                  animate={{ opacity: idx === activeIdx ? 1 : 0, x: idx === activeIdx ? 0 : -24 }}
-                  transition={{ duration: 0.7, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+              {/* Cinematic Gradients */}
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.3) 40%, transparent 100%)', pointerEvents: 'none', zIndex: 2 }} />
+              
+              {/* PART 3: LEFT SIDE DESCRIPTION PANEL */}
+              <div style={{ position: 'absolute', bottom: 100, left: 24, maxWidth: 'calc(100% - 90px)', zIndex: 3 }}>
+                <motion.div 
+                  initial={{ opacity: 0, x: -30 }} 
+                  animate={{ opacity: idx === activeIdx ? 1 : 0, x: idx === activeIdx ? 0 : -30 }} 
+                  transition={{ duration: 0.8, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
                 >
-                  <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
-                    <span style={{ background: 'rgba(255,215,0,0.07)', border: '1px solid rgba(255,215,0,0.28)', padding: '4px 8px', borderRadius: 5, fontSize: 8, textTransform: 'uppercase', color: '#FFD700', letterSpacing: '0.14em', fontWeight: 700, backdropFilter: 'blur(6px)' }}>{idol.cat}</span>
-                    <span style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', padding: '4px 8px', borderRadius: 5, fontSize: 8, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)', letterSpacing: '0.14em', fontWeight: 600, backdropFilter: 'blur(6px)' }}>{idol.metal}</span>
+                  <div style={{ display: 'flex', gap: 10, marginBottom: 12 }}>
+                    <span style={{ background: 'rgba(255,215,0,0.05)', border: '1px solid rgba(255,215,0,0.25)', padding: '5px 10px', borderRadius: 6, fontSize: 9, textTransform: 'uppercase', color: '#FFD700', letterSpacing: '0.15em', fontWeight: 600, backdropFilter: 'blur(8px)' }}>{idol.cat}</span>
+                    <span style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.15)', padding: '5px 10px', borderRadius: 6, fontSize: 9, textTransform: 'uppercase', color: '#FFF', letterSpacing: '0.15em', fontWeight: 600, backdropFilter: 'blur(8px)' }}>{idol.metal}</span>
                   </div>
-                  <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 'clamp(20px, 5.5vw, 38px)', margin: '0 0 6px', color: '#FFD700', textShadow: '0 3px 10px rgba(0,0,0,0.95)', fontWeight: 600, lineHeight: 1.1 }}>{idol.deity}</h2>
-                  <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 'clamp(13px, 3.5vw, 16px)', color: 'rgba(255,255,255,0.8)', margin: 0, textShadow: '0 2px 4px rgba(0,0,0,0.9)', fontStyle: 'italic', lineHeight: 1.5 }}>
-                    {idol.artisanNotes ? idol.artisanNotes.slice(0, 72) + '…' : 'Sacred craftsmanship · Sowcarpet workshop'}
+                  <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 'clamp(28px, 6vw, 42px)', margin: '0 0 8px 0', color: '#FFD700', textShadow: '0 4px 12px rgba(0,0,0,0.9)', fontWeight: 600, lineHeight: 1.1 }}>{idol.deity}</h2>
+                  <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 17, color: 'rgba(255,255,255,0.85)', margin: 0, textShadow: '0 2px 4px rgba(0,0,0,0.9)', fontStyle: 'italic', maxWidth: 400 }}>
+                    Sacred craftsmanship from our Sowcarpet workshop. 
                   </p>
-                  <button
-                    onClick={() => setShowDetailPanel(true)}
-                    style={{ background: 'none', border: 'none', color: '#FFD700', fontFamily: "'Jost', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '10px 0 0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, opacity: 0.85, touchAction: 'manipulation' }}
-                  >
-                    View More <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  
+                  <button onClick={() => setShowDetailPanel(true)} style={{ background: 'none', border: 'none', color: '#FFD700', fontFamily: "'Jost', sans-serif", fontSize: 12, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: 0, marginTop: 16, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, opacity: 0.8 }}>
+                    View More <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
                   </button>
                 </motion.div>
               </div>
 
-              {/* RIGHT: Action buttons — gid-keyed, safe-area aware */}
-              <div style={{
-                position: 'absolute',
-                bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
-                right: 12,
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 20,
-                alignItems: 'center',
-                zIndex: 3,
-              }}>
+              {/* PART 4: RIGHT SIDE ACTIONS (INSTAGRAM STYLE) */}
+              <div style={{ position: 'absolute', bottom: 100, right: 16, display: 'flex', flexDirection: 'column', gap: 24, alignItems: 'center', zIndex: 3 }}>
                 {[
-                  { key: 'like',    icon: <IconHeart filled={!!liked[idol.gid]}/>,    count: likesCounts[idol.gid] ?? '0', action: () => toggleLike(idol.gid),    active: !!liked[idol.gid] },
-                  { key: 'comment', icon: <IconComment/>,                              count: (realComments[idol.gid]?.length ?? 0) || '0', action: () => setShowComments(true), active: false },
-                  { key: 'save',    icon: <IconBookmark filled={!!saved[idol.gid]}/>, count: savesCounts[idol.gid] ?? '0', action: () => toggleSave(idol.gid),    active: !!saved[idol.gid] },
-                  { key: 'share',   icon: <IconShare/>,                               count: 'Share',                      action: () => setShowShareMenu(true),  active: false },
+                  { id: 'like', icon: <IconHeart filled={liked[idol.id]}/>, count: likesCounts[idol.id] ?? '0', action: () => toggleLike(idol.id), active: liked[idol.id] },
+                  { id: 'comment', icon: <IconComment/>, count: (realComments[idol.id]?.length ?? 0) || '0', action: () => setShowComments(true), active: false },
+                  { id: 'save', icon: <IconBookmark filled={saved[idol.id]}/>, count: savesCounts[idol.id] ?? '0', action: () => toggleSave(idol.id), active: saved[idol.id] },
+                  { id: 'share', icon: <IconShare/>, count: 'Share', action: () => setShowShareMenu(true), active: false }
                 ].map((btn, i) => (
-                  <motion.div
-                    key={btn.key}
-                    initial={{ opacity: 0, x: 24 }}
-                    animate={{ opacity: idx === activeIdx ? 1 : 0, x: idx === activeIdx ? 0 : 24 }}
-                    transition={{ duration: 0.5, delay: 0.2 + i * 0.08 }}
-                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}
-                  >
-                    <motion.button
-                      whileTap={{ scale: 0.88 }}
+                  <motion.div key={btn.id} initial={{ opacity: 0, x: 30 }} animate={{ opacity: idx === activeIdx ? 1 : 0, x: idx === activeIdx ? 0 : 30 }} transition={{ duration: 0.6, delay: 0.3 + i*0.1 }} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                    <motion.button 
+                      whileHover={{ scale: 1.15, filter: 'drop-shadow(0 0 8px rgba(255,215,0,0.5))' }} whileTap={{ scale: 0.9 }}
                       onClick={btn.action}
-                      style={{
-                        background: 'none', border: 'none',
-                        color: btn.active ? '#FFD700' : 'rgba(255,255,255,0.92)',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer',
-                        padding: 8,
-                        touchAction: 'manipulation',
-                        // Minimum 44×44 touch target per Apple HIG
-                        minWidth: 44, minHeight: 44,
-                        filter: btn.active ? 'drop-shadow(0 0 6px rgba(255,215,0,0.7))' : 'none',
-                        transition: 'color 0.25s, filter 0.25s',
-                      }}
+                      style={{ background: 'none', border: 'none', color: btn.active ? '#FFD700' : '#FFF', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'color 0.3s', padding: 0 }}
                     >
                       {btn.icon}
                     </motion.button>
-                    <span style={{ fontFamily: "'Jost', sans-serif", fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.75)', textShadow: '0 1px 4px rgba(0,0,0,0.8)', userSelect: 'none' }}>{btn.count}</span>
+                    <span style={{ fontFamily: "'Jost', sans-serif", fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.8)', textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>{btn.count}</span>
                   </motion.div>
                 ))}
               </div>
@@ -5251,129 +4843,139 @@ const ImmersiveFeed = () => {
         </div>
       )}
 
-      {/* DETAIL PANEL — Bottom sheet on mobile, side panel on desktop */}
+      {/* EXTENDED DETAIL PANEL — INLINE SIDE EXPANSION */}
       <AnimatePresence>
         {showDetailPanel && activeItem && (
-          <>
-            {/* Backdrop for mobile bottom-sheet dismiss */}
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowDetailPanel(false)}
-              style={{ position: 'fixed', inset: 0, zIndex: 148, background: 'rgba(0,0,0,0.5)' }}
-            />
-            <motion.div
-              initial={{ y: '100%' }}
-              animate={{ y: 0 }}
-              exit={{ y: '100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 220 }}
-              onClick={e => e.stopPropagation()}
-              style={{
-                position: 'fixed',
-                bottom: 0, left: 0, right: 0,
-                maxHeight: '80vh',
-                background: 'linear-gradient(180deg, rgba(22,18,14,0.98) 0%, rgba(12,9,6,1) 100%)',
-                backdropFilter: 'blur(24px)',
-                WebkitBackdropFilter: 'blur(24px)',
-                borderTop: '1px solid rgba(255,215,0,0.2)',
-                borderRadius: '28px 28px 0 0',
-                zIndex: 149,
-                overflowY: 'auto',
-                WebkitOverflowScrolling: 'touch',
-                paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
-                boxShadow: '0 -24px 80px rgba(0,0,0,0.8)',
+          <motion.div 
+            initial={{ x: '100%', opacity: 0 }} 
+            animate={{ x: 0, opacity: 1 }} 
+            exit={{ x: '100%', opacity: 0 }} 
+            transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+            onClick={e => e.stopPropagation()}
+            style={{ 
+              position: 'absolute', 
+              right: 0, 
+              top: 0, 
+              bottom: 0, 
+              width: '35vw',
+              maxWidth: 420,
+              background: 'linear-gradient(135deg, rgba(20, 18, 16, 0.95) 0%, rgba(15, 12, 10, 0.98) 100%)',
+              backdropFilter: 'blur(24px)',
+              borderLeft: '1px solid rgba(255,215,0,0.15)',
+              zIndex: 150, 
+              padding: '40px 32px',
+              overflowY: 'auto',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 32,
+              boxShadow: '-24px 0 80px rgba(0,0,0,0.6)'
+            }}
+          >
+            <motion.button 
+              whileHover={{ scale: 1.1, color: '#FFD700' }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setShowDetailPanel(false)} 
+              style={{ 
+                alignSelf: 'flex-end',
+                background: 'none', 
+                border: 'none', 
+                color: 'rgba(255,255,255,0.6)', 
+                fontSize: 28, 
+                cursor: 'pointer',
+                padding: 0,
+                transition: 'all 0.3s'
               }}
             >
-              {/* Drag handle */}
-              <div style={{ width: 40, height: 4, background: 'rgba(255,215,0,0.3)', borderRadius: 2, margin: '16px auto 0', flexShrink: 0 }} />
-
-              <div style={{ padding: '20px 24px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                <div>
-                  <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 'clamp(18px, 5vw, 26px)', color: '#FFD700', margin: '0 0 6px' }}>{activeItem.deity}</h2>
-                  <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', margin: 0 }}>Sacred craftsmanship · Sowcarpet</p>
-                </div>
-                <button
-                  onClick={() => setShowDetailPanel(false)}
-                  style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 28, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 4, touchAction: 'manipulation' }}
-                >×</button>
-              </div>
-
-              {/* Metadata grid */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '16px 24px', borderTop: '1px solid rgba(255,215,0,0.1)' }}>
-                {[
-                  { l: 'Material', v: activeItem.metal },
-                  { l: 'Category', v: activeItem.cat },
-                  { l: 'Crafting Time', v: '45–60 Days' },
-                  { l: 'Origin', v: 'Sowcarpet, Chennai' },
-                  { l: 'Technique', v: 'Lost Wax Casting' },
-                  { l: 'Purity', v: 'Certified' },
-                ].map(d => (
-                  <div key={d.l} style={{ paddingBottom: 10, borderBottom: '1px solid rgba(255,215,0,0.08)' }}>
-                    <div style={{ fontFamily: "'Jost', sans-serif", fontSize: 9, color: 'rgba(255,215,0,0.7)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 3, fontWeight: 700 }}>{d.l}</div>
-                    <div style={{ fontFamily: "'Jost', sans-serif", fontSize: 13, color: '#FFF' }}>{d.v || '—'}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Artisan notes */}
-              {activeItem.artisanNotes && (
-                <div style={{ padding: '0 24px 16px', borderTop: '1px solid rgba(255,215,0,0.1)', paddingTop: 16 }}>
-                  <div style={{ fontFamily: "'Jost', sans-serif", fontSize: 9, color: 'rgba(255,215,0,0.7)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontWeight: 700 }}>Artisan Notes</div>
-                  <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: 'rgba(255,255,255,0.82)', lineHeight: 1.7, margin: 0, fontStyle: 'italic' }}>{activeItem.artisanNotes}</p>
-                </div>
-              )}
-
-              {/* Commission CTA */}
-              <div style={{ padding: '16px 24px' }}>
-                <motion.button
-                  whileTap={{ scale: 0.97 }}
-                  onClick={() => { setShowDetailPanel(false); setShowCommissionModal(true); }}
-                  style={{ width: '100%', padding: '16px 24px', background: 'linear-gradient(135deg, rgba(255,215,0,0.18) 0%, rgba(255,215,0,0.08) 100%)', border: '1px solid rgba(255,215,0,0.45)', borderRadius: 12, color: '#FFD700', fontFamily: "'Jost', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, touchAction: 'manipulation' }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                  Commission This Piece
-                </motion.button>
-              </div>
+              ×
+            </motion.button>
+            
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+              <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 28, color: '#FFD700', marginBottom: 12, margin: 0 }}>{activeItem.deity}</h2>
+              <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: 'rgba(255,255,255,0.7)', fontStyle: 'italic', margin: '12px 0 0 0', lineHeight: 1.6 }}>Sacred craftsmanship from Sowcarpet</p>
             </motion.div>
-          </>
+            
+            <motion.div 
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              transition={{ delay: 0.15, duration: 0.5 }}
+              style={{ 
+                display: 'grid', 
+                gridTemplateColumns: '1fr 1fr', 
+                gap: 16,
+                paddingTop: 16,
+                borderTop: '1px solid rgba(255,215,0,0.15)'
+              }}
+            >
+              {[
+                { l: 'Material', v: activeItem.metal },
+                { l: 'Category', v: activeItem.cat },
+                { l: 'Crafting', v: '45–60 Days' },
+                { l: 'Origin', v: 'Sowcarpet' },
+                { l: 'Technique', v: 'Lost Wax' },
+                { l: 'Purity', v: 'Certified' }
+              ].map((d, i) => (
+                <motion.div 
+                  key={d.l}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.15 + i*0.05 }}
+                  style={{ 
+                    paddingBottom: 12,
+                    borderBottom: '1px solid rgba(255,215,0,0.1)'
+                  }}
+                >
+                  <div style={{ fontFamily: "'Jost', sans-serif", fontSize: 9, color: '#FFD700', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 4, fontWeight: 600 }}>{d.l}</div>
+                  <div style={{ fontFamily: "'Jost', sans-serif", fontSize: 13, color: '#FFF' }}>{d.v}</div>
+                </motion.div>
+              ))}
+            </motion.div>
+            
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              style={{ paddingTop: 16, borderTop: '1px solid rgba(255,215,0,0.15)' }}
+            >
+              <div style={{ fontFamily: "'Jost', sans-serif", fontSize: 10, color: '#FFD700', textTransform: 'uppercase', letterSpacing: '0.15em', marginBottom: 12, fontWeight: 700 }}>Artisan Notes</div>
+              <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 13, color: 'rgba(255,255,255,0.85)', lineHeight: 1.7, margin: 0 }}>Every detail from the Kireedam (crown) to Padmam (lotus base) is hand-chiselled with sacred mantras, ensuring spiritual authenticity alongside visual beauty.</p>
+            </motion.div>
+            
+            <motion.button
+              whileHover={{ scale: 1.02, borderColor: '#FFD700' }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => setShowCommissionModal(true)}
+              style={{
+                background: 'linear-gradient(135deg, rgba(255,215,0,0.15) 0%, rgba(255,215,0,0.08) 100%)',
+                border: '1px solid rgba(255,215,0,0.4)',
+                borderRadius: 12,
+                padding: '14px 24px',
+                color: '#FFD700',
+                fontFamily: "'Jost', sans-serif",
+                fontSize: 12,
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                textTransform: 'uppercase',
+                cursor: 'pointer',
+                transition: 'all 0.3s',
+                marginTop: 'auto'
+              }}
+            >
+              Inquire About This Piece
+            </motion.button>
+          </motion.div>
         )}
       </AnimatePresence>
 
-      {/* SHARE MENU — position:fixed works on all mobile contexts */}
+      {/* LUXURY SHARE MENU */}
       <AnimatePresence>
         {showShareMenu && (
-          <motion.div
-            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
-            onClick={() => setShowShareMenu(false)}
-          >
-            <motion.div
-              initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
-              transition={{ type: 'spring', damping: 26, stiffness: 200 }}
-              onClick={e => e.stopPropagation()}
-              style={{ width: '100%', maxWidth: 480, background: 'rgba(18,14,10,0.99)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: '24px 24px 0 0', padding: '24px 24px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))', boxShadow: '0 -12px 48px rgba(0,0,0,0.8)' }}
-            >
-              <div style={{ width: 36, height: 4, background: 'rgba(255,215,0,0.25)', borderRadius: 2, margin: '0 auto 20px' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-                <span style={{ fontFamily: "'Jost', sans-serif", fontSize: 13, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,215,0,0.85)', fontWeight: 700 }}>Share This Piece</span>
-                <button onClick={() => setShowShareMenu(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 24, cursor: 'pointer', touchAction: 'manipulation' }}>×</button>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
-                {[
-                  { label: 'Copy Link', icon: '🔗', action: () => { navigator.clipboard?.writeText(window.location.href); setShowShareMenu(false); } },
-                  { label: 'WhatsApp', icon: '💬', action: () => window.open(`https://wa.me/?text=${encodeURIComponent((activeItem?.deity || '') + ' — ' + window.location.href)}`) },
-                  { label: 'Instagram', icon: '📸', action: () => {} },
-                  { label: 'Pinterest', icon: '📌', action: () => {} },
-                ].map(p => (
-                  <button
-                    key={p.label}
-                    onClick={p.action}
-                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '14px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#FFF', touchAction: 'manipulation' }}
-                  >
-                    <span style={{ fontSize: 22 }}>{p.icon}</span>
-                    <span style={{ fontFamily: "'Jost', sans-serif", fontSize: 9, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{p.label}</span>
-                  </button>
-                ))}
-              </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', zIndex: 160, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowShareMenu(false)}>
+            <motion.div initial={{ scale: 0.8, y: 50 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.8, y: 50 }} onClick={e => e.stopPropagation()} style={{ background: 'rgba(20,18,16,0.95)', border: '1px solid rgba(255,215,0,0.3)', borderRadius: 24, padding: 40, display: 'flex', gap: 24, boxShadow: '0 24px 64px rgba(0,0,0,0.8)' }}>
+              {['Copy Link', 'WhatsApp', 'Instagram', 'Pinterest'].map((platform, i) => (
+                <motion.button key={platform} whileHover={{ y: -5, color: '#FFD700', borderColor: '#FFD700' }} style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '50%', width: 80, height: 80, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#FFF', cursor: 'pointer', transition: 'all 0.3s' }}>
+                  <div style={{ fontSize: 24 }}>{platform[0]}</div>
+                </motion.button>
+              ))}
             </motion.div>
           </motion.div>
         )}
@@ -5388,150 +4990,58 @@ const ImmersiveFeed = () => {
               <button onClick={() => setShowComments(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 28, cursor: 'pointer' }}>×</button>
             </div>
             <div style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
-              {((realComments[activeItem.gid] || []).concat(comments[activeItem.gid] || [])).length === 0 ? (
+              {((realComments[activeItem.id] || []).concat(comments[activeItem.id] || [])).length === 0 ? (
                 <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', marginTop: 60, fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontStyle: 'italic' }}>A silent admiration.<br/>Be the first to share your thoughts.</div>
               ) : (
-                ((realComments[activeItem.gid] || []).concat(comments[activeItem.gid] || [])).map((c, i) => (
-                  <div key={c.id || i} style={{ marginBottom: 18, display: 'flex', gap: 12, background: 'rgba(255,255,255,0.02)', padding: 14, borderRadius: 12, border: '1px solid rgba(255,255,255,0.03)' }}>
-                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFD700', fontFamily: "'Cinzel', serif", fontSize: 15, flexShrink: 0 }}>{(c.user || 'A')[0]}</div>
+                ((realComments[activeItem.id] || []).concat(comments[activeItem.id] || [])).map((c, i) => (
+                  <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i*0.05 }} key={c.id || i} style={{ marginBottom: 24, display: 'flex', gap: 16, background: 'rgba(255,255,255,0.02)', padding: 20, borderRadius: 16, border: '1px solid rgba(255,255,255,0.03)' }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFD700', fontFamily: "'Cinzel', serif", fontSize: 18, flexShrink: 0 }}>{(c.user || 'A')[0]}</div>
                     <div>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: '#FFF', fontFamily: "'Jost', sans-serif" }}>{c.user}</div>
-                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontFamily: "'Jost', sans-serif" }}>{c.time || (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '')}</div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 8 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: '#FFF', fontFamily: "'Jost', sans-serif", letterSpacing: '0.05em' }}>{c.user}</div>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontFamily: "'Jost', sans-serif" }}>{c.time || new Date(c.created_at).toLocaleDateString()}</div>
                       </div>
-                      <div style={{ fontSize: 14, fontFamily: "'Cormorant Garamond', serif", color: 'rgba(255,255,255,0.85)', lineHeight: 1.5, fontStyle: 'italic' }}>{c.text || c.content}</div>
+                      <div style={{ fontSize: 16, fontFamily: "'Cormorant Garamond', serif", color: 'rgba(255,255,255,0.85)', lineHeight: 1.5, fontStyle: 'italic' }}>"{c.text}"</div>
                     </div>
-                  </div>
+                  </motion.div>
                 ))
               )}
             </div>
-            <div style={{ padding: '12px 16px', background: 'rgba(0,0,0,0.6)', display: 'flex', gap: 10, paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))', flexShrink: 0 }}>
-              <input
-                value={commentInput}
-                onChange={e => setCommentInput(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && postComment(activeItem.gid)}
-                placeholder="Share your admiration..."
-                style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: 24, padding: '12px 16px', color: '#fff', outline: 'none', fontFamily: "'Jost', sans-serif", fontSize: 14 }}
-              />
-              <motion.button
-                whileTap={{ scale: 0.95 }}
-                onClick={() => postComment(activeItem.gid)}
-                style={{ background: '#FFD700', color: '#000', border: 'none', borderRadius: 24, padding: '0 18px', fontWeight: 700, cursor: 'pointer', fontFamily: "'Jost', sans-serif", fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0, touchAction: 'manipulation' }}
-              >Post</motion.button>
+            <div style={{ padding: '24px 32px', background: 'rgba(0,0,0,0.5)', display: 'flex', gap: 16, paddingBottom: 'calc(24px + env(safe-area-inset-bottom))' }}>
+              <input value={commentInput} onChange={e => setCommentInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && postComment(activeItem.id)} placeholder="Share your admiration..." style={{ flex: 1, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: 30, padding: '16px 24px', color: '#fff', outline: 'none', fontFamily: "'Jost', sans-serif", fontSize: 14, transition: 'border-color 0.3s' }} onFocus={e => e.target.style.borderColor = 'rgba(255,215,0,0.6)'} onBlur={e => e.target.style.borderColor = 'rgba(255,215,0,0.2)'} />
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={() => postComment(activeItem.id)} style={{ background: '#FFD700', color: '#000', border: 'none', borderRadius: 30, padding: '0 32px', fontWeight: 700, cursor: 'pointer', fontFamily: "'Jost', sans-serif", letterSpacing: '0.1em', textTransform: 'uppercase' }}>Post</motion.button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* BOTTOM NAVIGATION — position:fixed, always visible on masonry + immersive */}
-      <motion.div
-        initial={{ y: 100 }} animate={{ y: 0 }}
-        transition={{ type: 'spring', damping: 22, stiffness: 120, delay: 0.15 }}
-        style={{
-          position: 'fixed',
-          bottom: 0, left: 0, right: 0,
-          zIndex: 150,
-          background: 'linear-gradient(to top, rgba(4,3,2,0.99) 0%, rgba(8,6,4,0.92) 100%)',
-          backdropFilter: 'blur(20px)',
-          WebkitBackdropFilter: 'blur(20px)',
-          borderTop: '1px solid rgba(255,215,0,0.1)',
-          display: 'flex',
-          justifyContent: 'space-evenly',
-          alignItems: 'center',
-          // Dynamic height: nav content + safe area
-          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
-          paddingTop: 8,
-          paddingLeft: 4,
-          paddingRight: 4,
-          minHeight: 64,
-        }}
+      {/* BOTTOM NAVIGATION */}
+      <motion.div 
+        initial={{ y: 100 }} animate={{ y: 0 }} transition={{ type: 'spring', damping: 20, stiffness: 100, delay: 0.2 }}
+        style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 90, background: 'linear-gradient(to top, rgba(5,4,2,0.98) 0%, rgba(10,8,6,0.8) 100%)', backdropFilter: 'blur(30px)', borderTop: '1px solid rgba(255,215,0,0.1)', display: 'flex', justifyContent: 'space-evenly', alignItems: 'center', zIndex: 100, paddingBottom: 'env(safe-area-inset-bottom, 16px)' }}
       >
         {[
-          {
-            l: 'Home',
-            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
-            action: () => navigate('/'),
-          },
-          {
-            l: 'Search',
-            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
-            action: () => setIsSearchOpen(true),
-          },
-          null, // centre slot = Enquire pill
-          {
-            l: 'Saved',
-            icon: <IconBookmark filled={false}/>,
-            action: () => setShowProfile(true),
-          },
-          {
-            l: 'Profile',
-            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
-            action: () => setShowProfile(true),
-          },
-        ].map((btn, i) => {
-          if (btn === null) {
-            // Central Enquire pill — lifted above nav bar
-            return (
-              <motion.button
-                key="enquire"
-                whileTap={{ scale: 0.94 }}
+          { l: 'Home', icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>, a: () => navigate('/') },
+          { l: 'Search', icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>, a: () => setIsSearchOpen(true) },
+          { l: 'Saved', icon: <IconBookmark filled={false}/>, a: () => { /* open saved */ setShowProfile(true); } },
+          { l: 'Profile', icon: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>, a: () => setShowProfile(true) },
+        ].map((btn, i) => (
+          <React.Fragment key={btn.l}>
+            {i === 2 && (
+              <motion.button 
+                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                 onClick={() => setShowCommissionModal(true)}
-                style={{
-                  background: 'linear-gradient(135deg, rgba(255,215,0,0.95) 0%, rgba(195,148,0,1) 100%)',
-                  border: 'none',
-                  borderRadius: 32,
-                  height: 46,
-                  padding: '0 18px',
-                  color: '#000',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 7,
-                  cursor: 'pointer',
-                  fontWeight: 800,
-                  fontFamily: "'Jost', sans-serif",
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  fontSize: 11,
-                  boxShadow: '0 4px 20px rgba(255,215,0,0.35), 0 2px 8px rgba(0,0,0,0.6)',
-                  transform: 'translateY(-12px)',
-                  touchAction: 'manipulation',
-                  flexShrink: 0,
-                  whiteSpace: 'nowrap',
-                }}
+                style={{ background: 'linear-gradient(135deg, rgba(255,215,0,0.9) 0%, rgba(200,150,0,1) 100%)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 40, height: 50, padding: '0 24px', color: '#000', display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', fontWeight: 700, fontFamily: "'Jost', sans-serif", textTransform: 'uppercase', letterSpacing: '0.1em', boxShadow: '0 8px 24px rgba(255,215,0,0.3)', transform: 'translateY(-15px)' }}
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
                 <span>Enquire</span>
               </motion.button>
-            );
-          }
-          return (
-            <motion.button
-              key={btn.l}
-              whileTap={{ scale: 0.88 }}
-              onClick={btn.action}
-              style={{
-                background: 'none',
-                border: 'none',
-                color: 'rgba(255,255,255,0.55)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 3,
-                cursor: 'pointer',
-                padding: '6px 8px',
-                minWidth: 44,
-                minHeight: 44,
-                touchAction: 'manipulation',
-                transition: 'color 0.2s',
-              }}
-              onTouchStart={e => e.currentTarget.style.color = '#FFD700'}
-              onTouchEnd={e => e.currentTarget.style.color = 'rgba(255,255,255,0.55)'}
-            >
+            )}
+            <motion.button whileTap={{ scale: 0.9 }} onClick={btn.a} style={{ background: 'none', border: 'none', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', opacity: 0.6, transition: 'all 0.3s' }} onMouseEnter={e=>{e.currentTarget.style.opacity=1; e.currentTarget.style.color='#FFD700';}} onMouseLeave={e=>{e.currentTarget.style.opacity=0.6; e.currentTarget.style.color='#fff';}}>
               {btn.icon}
-              <span style={{ fontFamily: "'Jost', sans-serif", fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{btn.l}</span>
             </motion.button>
-          );
-        })}
+          </React.Fragment>
+        ))}
       </motion.div>
 
       {/* MODALS */}
@@ -5544,16 +5054,27 @@ const ImmersiveFeed = () => {
 
 const GalleryPage = ({ scrolled }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const initialId = location.state?.activeId;
 
-  // Scroll to top only when entering masonry view (no specific image selected)
+  // ── Always scroll to top when gallery page mounts ──
   useEffect(() => {
-    if (!initialId) window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-  }, [initialId]);
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, []);
 
-  // ImmersiveFeed is self-contained: shows masonry or immersive viewer
-  // based on location.state.activeId — no Nav/Footer needed
-  return <ImmersiveFeed />;
+  if (initialId !== undefined && initialId !== null) {
+    return <ImmersiveFeed />;
+  }
+
+  return (
+    <>
+      <Nav scrolled={scrolled} />
+      <div style={{ minHeight: '100vh' }}>
+        <Gallery isFullPage={true} initialSelected={null} onSelect={(id) => navigate('/gallery', { state: { activeId: id } })} />
+      </div>
+      <Footer />
+    </>
+  );
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -5994,7 +5515,13 @@ const AdminLogin = () => {
     const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
     if (!supabaseUrl || !supabaseKey) {
-      setError('Authentication service is not configured. Please set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY in your .env.local file.');
+      // Dev fallback — hardcoded only if env vars not set
+      if(email === 'admin@vijaymetalworks.com' && password === 'admin123') {
+        localStorage.setItem('vmw_admin_auth', 'true');
+        navigate('/admin');
+      } else {
+        setError('Invalid credentials.');
+      }
       setLoading(false);
       return;
     }
@@ -6083,7 +5610,7 @@ const AdminGalleryManager = ({ C, supabaseUrl, supabaseKey, onRefreshStats }) =>
     return { 'apikey': supabaseKey, 'Authorization': `Bearer ${token}` };
   };
 
-  const fetchItems = useCallback(async () => {
+  const fetchItems = async () => {
     if (!supabaseUrl || !supabaseKey) { setLoading(false); return; }
     try {
       setLoading(true);
@@ -6094,19 +5621,15 @@ const AdminGalleryManager = ({ C, supabaseUrl, supabaseKey, onRefreshStats }) =>
       setItems(data);
     } catch(e) { console.error(e); }
     finally { setLoading(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabaseUrl, supabaseKey]);
+  };
 
-  useEffect(() => { fetchItems(); }, [fetchItems]);
+  useEffect(() => { fetchItems(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    // Revoke previous preview URL to prevent memory leak
-    setForm(f => {
-      if (f.preview) URL.revokeObjectURL(f.preview);
-      return { ...f, file, preview: URL.createObjectURL(file) };
-    });
+    const preview = URL.createObjectURL(file);
+    setForm(f => ({ ...f, file, preview }));
   };
 
   const handleUpload = async () => {
@@ -6117,51 +5640,68 @@ const AdminGalleryManager = ({ C, supabaseUrl, supabaseKey, onRefreshStats }) =>
     setUploadProgress(10);
 
     try {
-      // Step 1: Insert metadata — DO NOT send `id`, let Postgres auto-generate UUID
+      // 1. Generate stable gid from title + timestamp
+      const ts = Date.now();
+      const slug = form.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 20);
+      const gid = `vmw-upload-${slug}-${ts}`;
+      const ext = form.file.name.split('.').pop().toLowerCase();
+      const storagePath = `gallery/${gid}.${ext}`;
+
+      setUploadProgress(25);
+
+      // 2. Upload to Supabase Storage (gallery bucket — must be public)
+      const uploadRes = await fetch(
+        `${supabaseUrl}/storage/v1/object/gallery-images/${storagePath}`,
+        {
+          method: 'POST',
+          headers: {
+            ...getAuthHeaders(),
+            'Content-Type': form.file.type,
+            'x-upsert': 'true',
+          },
+          body: form.file,
+        }
+      );
+
+      if (!uploadRes.ok) {
+        const err = await uploadRes.text();
+        throw new Error(`Storage upload failed: ${err}`);
+      }
+
+      setUploadProgress(60);
+
+      // 3. Get public URL
+      const publicUrl = `${supabaseUrl}/storage/v1/object/public/gallery-images/${storagePath}`;
+
+      setUploadProgress(75);
+
+      // 4. Insert into gallery_items table
       const insertRes = await fetch(`${supabaseUrl}/rest/v1/gallery_items`, {
         method: 'POST',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+        headers: {
+          ...getAuthHeaders(),
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation',
+        },
         body: JSON.stringify({
+          id: gid,
           title: form.title.trim(),
           category: form.category,
           metal_type: form.metal_type,
+          image_url: publicUrl,
           is_featured: form.is_featured,
-          image_url: '', // placeholder — updated after upload
         }),
       });
-      if (!insertRes.ok) throw new Error(`DB insert failed: ${await insertRes.text()}`);
-      const [newRow] = await insertRes.json();
-      const uuid = newRow.id; // real UUID from gen_random_uuid()
-      setUploadProgress(35);
 
-      // Step 2: Upload image using real UUID as path (no collision risk)
-      const ext = form.file.name.split('.').pop().toLowerCase();
-      const storagePath = `gallery/${uuid}.${ext}`;
-      const uploadRes = await fetch(`${supabaseUrl}/storage/v1/object/gallery-images/${storagePath}`, {
-        method: 'POST',
-        headers: { ...getAuthHeaders(), 'Content-Type': form.file.type, 'x-upsert': 'true' },
-        body: form.file,
-      });
-      if (!uploadRes.ok) {
-        // Roll back DB row if storage fails
-        await fetch(`${supabaseUrl}/rest/v1/gallery_items?id=eq.${uuid}`, { method: 'DELETE', headers: getAuthHeaders() });
-        throw new Error(`Image upload failed: ${await uploadRes.text()}`);
+      if (!insertRes.ok) {
+        const err = await insertRes.text();
+        throw new Error(`DB insert failed: ${err}`);
       }
-      setUploadProgress(75);
-
-      // Step 3: Update row with real public URL
-      const publicUrl = `${supabaseUrl}/storage/v1/object/public/gallery-images/${storagePath}`;
-      const updateRes = await fetch(`${supabaseUrl}/rest/v1/gallery_items?id=eq.${uuid}`, {
-        method: 'PATCH',
-        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-        body: JSON.stringify({ image_url: publicUrl }),
-      });
-      if (!updateRes.ok) throw new Error(`URL update failed: ${await updateRes.text()}`);
 
       setUploadProgress(100);
       showToast(`"${form.title}" uploaded and live on website! ✓`);
 
-      if (form.preview) URL.revokeObjectURL(form.preview);
+      // 5. Reset form and refresh list
       setForm({ title: '', category: 'Gold Work', metal_type: '24K Gold Nagas', is_featured: false, file: null, preview: null });
       if (fileRef.current) fileRef.current.value = '';
       setShowUploadForm(false);
@@ -6406,7 +5946,7 @@ const AdminDashboard = () => {
   const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
   const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-  const fetchAdminData = useCallback(async () => {
+  const fetchAdminData = async () => {
     if(!supabaseUrl || !supabaseKey) return;
     try {
       setLoading(true);
@@ -6440,7 +5980,7 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [supabaseUrl, supabaseKey]);
+  };
 
   const updateInquiryStatus = async (id, newStatus) => {
     if(!supabaseUrl || !supabaseKey) return;
@@ -6463,7 +6003,7 @@ const AdminDashboard = () => {
       setIsAuth(true);
       fetchAdminData();
     }
-  }, [navigate, fetchAdminData]);
+  }, [navigate]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if(!isAuth) return null;
 
@@ -6640,6 +6180,7 @@ function AppContent() {
     <ThemeCtx.Provider value={themeC}>
       <AppCtx.Provider value={{ showCommissionModal, setShowCommissionModal, showAuthModal, setShowAuthModal, authAction, setAuthAction, isLoggedIn, setIsLoggedIn, user, setUser }}>
         <SEOMeta/>
+        <style>{buildCSS(themeC)}</style>
         <div style={{background:themeC.bg1,color:themeC.text,overflowX:'hidden',minHeight:'100vh',transition:'background .35s,color .35s'}}>
           <ThemeToggle mode={mode} setMode={setMode} C={themeC}/>
           <AnimatePresence mode="wait">
