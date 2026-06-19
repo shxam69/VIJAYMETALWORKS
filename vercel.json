@@ -1,0 +1,5 @@
+{
+  "buildCommand": "CI=false DISABLE_ESLINT_PLUGIN=true react-scripts build",
+  "outputDirectory": "build",
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
+}

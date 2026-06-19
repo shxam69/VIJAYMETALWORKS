@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   motion, AnimatePresence,
   useScroll, useTransform, useInView
 } from 'framer-motion';
+import { BrowserRouter, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 
 /* ═══════════════════════════════════════════════════════════════
    SEO META — injected into document head
@@ -106,42 +107,300 @@ const BIZ = {
 // 3D model disabled — using logo + real photos instead
 
 /* ═══════════════════════════════════════════════════════════════
-   REAL VMW PRODUCT IMAGES — place files in /public/vmw/
-   Filenames match exactly what's in the uploaded asset zip.
+   REAL VMW PRODUCT IMAGES — wired to /public/gallery/
+   Available: gold/ (13), silver/ (1 .jpg), stone/ (7), temple/ (2)
+   NOTE: silver/*.heic files skipped — HEIC has no browser support.
 ═══════════════════════════════════════════════════════════════ */
 const VMW = {
   // Hero & Featured
-  hero1:    '/vmw/product_01.jpg',  // Square showpiece
-  hero2:    '/vmw/product_02.jpg',  // Square showpiece
+  hero1:     '/gallery/gold/crown.jpg',
+  hero2:     '/gallery/gold/crown1.jpg',
   // Idols & Vigraham
-  idol1:    '/vmw/product_03.jpg',
-  idol2:    '/vmw/product_09.jpg',
-  idol3:    '/vmw/product_10.jpg',
-  idol4:    '/vmw/product_11.jpg',
+  idol1:     '/gallery/temple/god.jpg',
+  idol2:     '/gallery/temple/temple.jpg',
+  idol3:     '/gallery/gold/crownn.jpg',
+  idol4:     '/gallery/gold/crownnside.jpg',
   // Gold Work
-  goldwork1:'/vmw/product_13.jpg',  // Kasu Malai
-  goldwork2:'/vmw/product_20.jpg',  // Sadari gold
-  goldwork3:'/vmw/product_18.jpg',  // Kanganam
+  goldwork1: '/gallery/gold/kandabaranam.jpg',
+  goldwork2: '/gallery/gold/sadarigold.jpg',
+  goldwork3: '/gallery/gold/kanganam4.jpg',
   // Silver Work
-  silver1:  '/vmw/product_15.jpg',  // Sadari silver
-  silver2:  '/vmw/product_14.jpg',  // Sadari 2
-  silver3:  '/vmw/product_19.jpg',  // Kasumala
+  silver1:   '/gallery/silver/kandabaranam.jpg',
+  silver2:   '/gallery/gold/SADARI 2.jpg',
+  silver3:   '/gallery/stone/stone1.jpg',
   // Crown / Headgear
-  crown1:   '/vmw/product_07.jpg',
-  crown2:   '/vmw/product_22.jpg',
-  crown3:   '/vmw/product_24.jpg',
+  crown1:    '/gallery/gold/crown.jpg',
+  crown2:    '/gallery/gold/crown1.jpg',
+  crown3:    '/gallery/gold/straight crown.jpg',
   // Landscape / Workshop
-  workshop: '/vmw/product_12.jpg',
-  wide1:    '/vmw/product_04.jpg',  // landscape product
-  wide2:    '/vmw/product_16.jpg',  // WhatsApp landscape
-  // More products
-  prod05:   '/vmw/product_05.jpg',
-  prod06:   '/vmw/product_06.jpg',
-  prod08:   '/vmw/product_08.jpg',
-  prod17:   '/vmw/product_17.jpg',
-  prod21:   '/vmw/product_21.jpg',
-  prod23:   '/vmw/product_23.jpg',
-  prod25:   '/vmw/product_25.jpg',
+  workshop:  '/gallery/temple/temple.jpg',
+  wide1:     '/gallery/stone/stone2.jpg',
+  wide2:     '/gallery/stone/stone3.jpg',
+  // More pieces
+  prod05:    '/gallery/stone/stone4.jpg',
+  prod06:    '/gallery/gold/hand1.jpg',
+  prod08:    '/gallery/gold/crownn.jpg',
+  prod17:    '/gallery/stone/kow pa.jpg',
+  prod21:    '/gallery/gold/sur kad.png',
+  prod23:    '/gallery/stone/kow pathakkam.png',
+  prod25:    '/gallery/stone/thamarai poo3.jpg',
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   SUPABASE UTILITIES — Real Data Integration
+═══════════════════════════════════════════════════════════════ */
+
+const SUPABASE_CONFIG = {
+  url: process.env.REACT_APP_SUPABASE_URL,
+  key: process.env.REACT_APP_SUPABASE_ANON_KEY,
+};
+
+if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.key) {
+  console.warn('[VMW] Supabase env vars not set. Set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY in .env to enable live data. Running in offline/mock mode.');
+}
+
+// Cache with TTL (5 minutes)
+const CACHE = new Map();
+const CACHE_TTL = 5 * 60 * 1000;
+
+const getCached = (key) => {
+  const cached = CACHE.get(key);
+  if (cached && Date.now() - cached.time < CACHE_TTL) return cached.data;
+  return null;
+};
+
+const setCached = (key, data) => {
+  CACHE.set(key, { data, time: Date.now() });
+};
+
+// localStorage persistence for user's personal state
+const getUserState = () => {
+  try {
+    const stored = localStorage.getItem('vmw_user_state');
+    return stored ? JSON.parse(stored) : { likes: {}, saves: {}, comments: {} };
+  } catch (_) {
+    localStorage.removeItem('vmw_user_state');
+    return { likes: {}, saves: {}, comments: {} };
+  }
+};
+
+const setUserState = (state) => {
+  localStorage.setItem('vmw_user_state', JSON.stringify(state));
+};
+
+// ── Core fetch wrapper — always sends auth token if session exists ──────────
+const supabaseCall = async (endpoint, method = 'GET', body = null, extraHeaders = {}) => {
+  if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.key) return null;
+
+  // Attach live session bearer token when available
+  let authHeader = `Bearer ${SUPABASE_CONFIG.key}`;
+  try {
+    const sess = localStorage.getItem('vmw_session');
+    if (sess) {
+      const parsed = JSON.parse(sess);
+      if (parsed?.access_token) authHeader = `Bearer ${parsed.access_token}`;
+    }
+  } catch (_) {}
+
+  const opts = {
+    method,
+    headers: {
+      'apikey': SUPABASE_CONFIG.key,
+      'Authorization': authHeader,
+      'Content-Type': 'application/json',
+      ...extraHeaders,
+    },
+  };
+
+  if (body) opts.body = JSON.stringify(body);
+
+  try {
+    const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1${endpoint}`, opts);
+    if (res.ok) {
+      // HEAD requests and DELETE return empty body
+      const text = await res.text();
+      return text ? JSON.parse(text) : null;
+    }
+    const errText = await res.text();
+    console.warn('Supabase error', res.status, errText);
+  } catch (e) {
+    console.warn('Supabase call failed:', e);
+  }
+  return null;
+};
+
+// ── Count helper using PostgREST exact count ─────────────────────────────────
+const getCount = async (table, filter) => {
+  if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.key) return 0;
+  try {
+    const res = await fetch(
+      `${SUPABASE_CONFIG.url}/rest/v1/${table}?${filter}&select=id`,
+      {
+        headers: {
+          'apikey': SUPABASE_CONFIG.key,
+          'Authorization': `Bearer ${SUPABASE_CONFIG.key}`,
+          'Prefer': 'count=exact',
+          'Range': '0-0',
+        },
+      }
+    );
+    const cr = res.headers.get('content-range'); // "0-0/42"
+    if (cr) return parseInt(cr.split('/')[1], 10) || 0;
+  } catch (_) {}
+  return 0;
+};
+
+// Get likes count for an idol — FIX: column is gallery_item_id not idol_id
+const getIdolLikesCount = async (idolId) => {
+  const cacheKey = `likes_count_${idolId}`;
+  const cached = getCached(cacheKey);
+  if (cached !== null) return cached;
+  const count = await getCount('likes', `gallery_item_id=eq.${idolId}`);
+  setCached(cacheKey, count);
+  return count;
+};
+
+// Get saves count for an idol — FIX: column is gallery_item_id not idol_id
+const getIdolSavesCount = async (idolId) => {
+  const cacheKey = `saves_count_${idolId}`;
+  const cached = getCached(cacheKey);
+  if (cached !== null) return cached;
+  const count = await getCount('saved_items', `gallery_item_id=eq.${idolId}`);
+  setCached(cacheKey, count);
+  return count;
+};
+
+// Get comments for an idol — FIX: column is gallery_item_id & content not text
+const getIdolComments = async (idolId) => {
+  const cacheKey = `comments_${idolId}`;
+  const cached = getCached(cacheKey);
+  if (cached !== null) return cached;
+  const data = await supabaseCall(
+    `/comments?gallery_item_id=eq.${idolId}&order=created_at.desc&limit=20&select=id,content,created_at,user_id`
+  );
+  const comments = data || [];
+  setCached(cacheKey, comments);
+  return comments;
+};
+
+// Toggle like (optimistic + server) — FIX: correct column names
+const toggleIdolLike = async (idolId, userId, isCurrentlyLiked) => {
+  const userState = getUserState();
+  userState.likes[idolId] = !isCurrentlyLiked;
+  setUserState(userState);
+
+  if (!isCurrentlyLiked) {
+    await supabaseCall('/likes', 'POST', { gallery_item_id: idolId, user_id: userId });
+  } else {
+    await supabaseCall(`/likes?gallery_item_id=eq.${idolId}&user_id=eq.${userId}`, 'DELETE');
+  }
+  CACHE.delete(`likes_count_${idolId}`);
+};
+
+// Toggle save (optimistic + server) — FIX: correct column names
+const toggleIdolSave = async (idolId, userId, isCurrentlySaved) => {
+  const userState = getUserState();
+  userState.saves[idolId] = !isCurrentlySaved;
+  setUserState(userState);
+
+  if (!isCurrentlySaved) {
+    await supabaseCall('/saved_items', 'POST', { gallery_item_id: idolId, user_id: userId });
+  } else {
+    await supabaseCall(`/saved_items?gallery_item_id=eq.${idolId}&user_id=eq.${userId}`, 'DELETE');
+  }
+  CACHE.delete(`saves_count_${idolId}`);
+};
+
+// Add comment — FIX: column is gallery_item_id & content not text
+const addIdolComment = async (idolId, userId, text) => {
+  const userState = getUserState();
+  if (!userState.comments[idolId]) userState.comments[idolId] = [];
+
+  const tempComment = {
+    id: 'temp_' + Date.now(),
+    content: text,
+    user_id: userId,
+    created_at: new Date().toISOString(),
+  };
+  userState.comments[idolId].unshift(tempComment);
+  setUserState(userState);
+
+  await supabaseCall('/comments', 'POST', { gallery_item_id: idolId, user_id: userId, content: text });
+  CACHE.delete(`comments_${idolId}`);
+};
+
+// Log view event — FIX: analytics_events has no idol_id column; use metadata JSONB
+const logViewEvent = async (idolId, userId) => {
+  await supabaseCall('/analytics_events', 'POST', {
+    event_type: 'view',
+    user_id: userId || null,
+    metadata: { gallery_item_id: idolId },
+  });
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   SITE IMAGES — admin-controlled image overrides
+   Fetched from `site_images` Supabase table on app load.
+   Falls back to the hardcoded static paths when not overridden.
+═══════════════════════════════════════════════════════════════ */
+const SiteImgCtx = React.createContext({});
+const useSiteImg = () => React.useContext(SiteImgCtx);
+
+// Default static fallbacks — mirrors SITE_IMAGE_SLOTS in admin
+const SITE_IMG_DEFAULTS = {
+  hero_bg:        '/gallery/gold/crown.jpg',
+  craftwork_1:    '/gallery/gold/sadarigold.jpg',
+  craftwork_2:    '/gallery/gold/crown.jpg',
+  craftwork_3:    '/gallery/gold/kanganam4.jpg',
+  craftwork_4:    '/gallery/gold/kandabaranam.jpg',
+  service_gold:   '/gallery/gold/sadarigold.jpg',
+  service_silver: '/gallery/silver/kandabaranam.jpg',
+  service_copper: '/gallery/gold/hand1.jpg',
+  service_pancha: '/gallery/temple/god.jpg',
+  service_vimana: '/gallery/gold/crownn.jpg',
+  service_stone:  '/gallery/stone/stone1.jpg',
+  legacy_1:       '/gallery/gold/crown.jpg',
+  legacy_2:       '/gallery/gold/crown1.jpg',
+  work_1:         '/gallery/gold/crown.jpg',
+  work_2:         '/gallery/gold/crown1.jpg',
+  work_3:         '/gallery/gold/kanganam4.jpg',
+  work_4:         '/gallery/silver/kandabaranam.jpg',
+  work_5:         '/gallery/gold/kandabaranam.jpg',
+  work_6:         '/gallery/temple/god.jpg',
+  showcase_main:  '/gallery/temple/temple.jpg',
+  process_1:      '/gallery/gold/crown.jpg',
+  process_2:      '/gallery/gold/kandabaranam.jpg',
+  process_3:      '/gallery/stone/stone1.jpg',
+  preview_1:      '/gallery/gold/sadarigold.jpg',
+  preview_2:      '/gallery/gold/crown.jpg',
+  preview_3:      '/gallery/gold/kandabaranam.jpg',
+  preview_4:      '/gallery/gold/crown1.jpg',
+  preview_5:      '/gallery/stone/stone1.jpg',
+  preview_6:      '/gallery/temple/god.jpg',
+};
+
+// Hook — fetches overrides once, merges with defaults
+const useSiteImages = () => {
+  const [imgs, setImgs] = useState({ ...SITE_IMG_DEFAULTS });
+  useEffect(() => {
+    if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.key) return;
+    fetch(`${SUPABASE_CONFIG.url}/rest/v1/site_images?select=id,image_url`, {
+      headers: {
+        'apikey': SUPABASE_CONFIG.key,
+        'Authorization': `Bearer ${SUPABASE_CONFIG.key}`,
+      },
+    })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data && Array.isArray(data)) {
+          const overrides = {};
+          data.forEach(row => { overrides[row.id] = row.image_url; });
+          setImgs(prev => ({ ...prev, ...overrides }));
+        }
+      })
+      .catch(() => {}); // fail silently — static fallbacks remain
+  }, []);
+  return imgs;
 };
 
 
@@ -170,6 +429,8 @@ const THEMES = {
 };
 const ThemeCtx = React.createContext(THEMES.dark);
 const useTheme = () => React.useContext(ThemeCtx);
+const AppCtx = React.createContext({});
+export const useAppCtx = () => React.useContext(AppCtx);
 const useThemeMode = () => {
   const [mode,setMode] = useState('auto');
   const [C,setC] = useState(THEMES.dark);
@@ -267,40 +528,100 @@ const ff = {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   GALLERY DATA
+   GALLERY DATA — wired to real images in /public/gallery/
+   Gold:   /gallery/gold/   (13 images — .jpg/.png)
+   Silver: /gallery/silver/ (1 .jpg — .heic files skipped, no browser support)
+   Stone:  /gallery/stone/  (7 images — .jpg/.png)
+   Temple: /gallery/temple/ (2 images — .jpg)
 ═══════════════════════════════════════════════════════════════ */
+// NOTE: gid = stable UUID used as gallery_item_id in Supabase likes/saves/comments
+// These must match the UUIDs in your Supabase gallery_items table.
+// Run the seed SQL (SUPABASE_SCHEMA.sql → gallery seed) to create matching rows.
 const GALLERY_IDOLS = [
-  { id:0, deity:'Sadari Crown',       metal:'24K Gold Nagas',       img:'/vmw/product_20.jpg', cat:'Gold Work' },
-  { id:1, deity:'Temple Jewellery',   metal:'Gold · Stone Setting', img:'/vmw/product_13.jpg', cat:'Crown Work' },
-  { id:2, deity:'Kanganam Bangle',    metal:'Gold Plated Copper',   img:'/vmw/product_18.jpg', cat:'Copper Work' },
-  { id:3, deity:'Kasumala Necklace',  metal:'Silver · Stone',       img:'/vmw/product_19.jpg', cat:'Silver Work' },
-  { id:4, deity:'Sadari Piece',       metal:'Sterling Silver',      img:'/vmw/product_15.jpg', cat:'Silver Work' },
-  { id:5, deity:'Temple Sadari',      metal:'Gold & Silver',        img:'/vmw/product_14.jpg', cat:'Gold Work' },
-  { id:6, deity:'Crown Work',         metal:'Panchaloha',           img:'/vmw/product_22.jpg', cat:'Vigraham' },
-  { id:7, deity:'Deity Ornament',     metal:'24K Gold Electro',     img:'/vmw/product_24.jpg', cat:'Electro Gold' },
-  { id:8, deity:'Workshop Piece',     metal:'Brass · Polish',       img:'/vmw/product_23.jpg', cat:'Brass Work' },
-  { id:9, deity:'Sacred Vessel',      metal:'Copper · Gold Foil',   img:'/vmw/product_04.jpg', cat:'Copper Work' },
+  // ── Gold Work ───────────────────────────────────────────────
+  { id:0,  gid:'vmw-gold-00', deity:'Sadari Gold Crown',       metal:'24K Gold Nagas',         purity:'24 Karat',  dims:'22cm × 18cm', stone:'None',        duration:'45–60 days', origin:'Sowcarpet', img:'/gallery/gold/sadarigold.jpg',         cat:'Gold Work',   artisanNotes:'Hand-chiselled Sadari with traditional Nagas finish. Each naga scale individually pressed.' },
+  { id:1,  gid:'vmw-gold-01', deity:'Crown — Front View',      metal:'Gold Nagas Handcrafted', purity:'22 Karat',  dims:'30cm × 26cm', stone:'None',        duration:'60–90 days', origin:'Sowcarpet', img:'/gallery/gold/crown.jpg',              cat:'Gold Work',   artisanNotes:'Kireedam crafted per Agama Shastra proportions with hand-beaten gold sheets.' },
+  { id:2,  gid:'vmw-gold-02', deity:'Crown — Back Detail',     metal:'24K Gold Polish',        purity:'24 Karat',  dims:'30cm × 26cm', stone:'None',        duration:'60–90 days', origin:'Sowcarpet', img:encodeURIComponent('/gallery/gold/crown back.jpg').replace(/%2F/g,'/'), cat:'Gold Work',   artisanNotes:'Back detail showing intricate lotus petal work and gold filigree.' },
+  { id:3,  gid:'vmw-gold-03', deity:'Crown — Side View',       metal:'Gold Nagas Finish',      purity:'22 Karat',  dims:'30cm × 26cm', stone:'None',        duration:'60–90 days', origin:'Sowcarpet', img:encodeURIComponent('/gallery/gold/crown side.jpg').replace(/%2F/g,'/'), cat:'Gold Work',   artisanNotes:'Side profile reveals layered construction — inner copper frame, outer gold sheet.' },
+  { id:4,  gid:'vmw-gold-04', deity:'Crown Piece I',           metal:'Gold Handwork',          purity:'22 Karat',  dims:'28cm × 22cm', stone:'None',        duration:'45–60 days', origin:'Sowcarpet', img:'/gallery/gold/crown1.jpg',             cat:'Gold Work',   artisanNotes:'Classic crown form with embossed floral patterns across the Makuta band.' },
+  { id:5,  gid:'vmw-gold-05', deity:'Crown — Tall Form',       metal:'Gold Alloy Polish',      purity:'18 Karat',  dims:'38cm × 24cm', stone:'None',        duration:'60–75 days', origin:'Sowcarpet', img:'/gallery/gold/crownn.jpg',             cat:'Gold Work',   artisanNotes:'Tall Makuta form for Vishnu pantheon deities, mirror-polished finish.' },
+  { id:6,  gid:'vmw-gold-06', deity:'Crown — Side Tall',       metal:'24K Nagas Finish',       purity:'24 Karat',  dims:'38cm × 24cm', stone:'None',        duration:'60–75 days', origin:'Sowcarpet', img:'/gallery/gold/crownnside.jpg',         cat:'Gold Work',   artisanNotes:'Side view of tall Makuta — the spine rib structure ensures strength and symmetry.' },
+  { id:7,  gid:'vmw-gold-07', deity:'Straight Crown',          metal:'Gold Beaten Work',       purity:'22 Karat',  dims:'25cm × 20cm', stone:'None',        duration:'30–45 days', origin:'Sowcarpet', img:encodeURIComponent('/gallery/gold/straight crown.jpg').replace(/%2F/g,'/'), cat:'Gold Work',   artisanNotes:'Cylindrical Kireedam with straight walls — traditional South Indian temple style.' },
+  { id:8,  gid:'vmw-gold-08', deity:'Hand Ornament',           metal:'Gold Plated Copper',     purity:'Plated',    dims:'15cm × 8cm',  stone:'None',        duration:'20–30 days', origin:'Sowcarpet', img:'/gallery/gold/hand1.jpg',              cat:'Gold Work',   artisanNotes:'Hasta Abharana set for deity hand — electro-gold plated over solid copper base.' },
+  { id:9,  gid:'vmw-gold-09', deity:'Kandabaranam',            metal:'Temple Gold Crown',      purity:'22 Karat',  dims:'35cm × 28cm', stone:'Ruby, Emerald',duration:'75–90 days', origin:'Sowcarpet', img:'/gallery/gold/kandabaranam.jpg',       cat:'Crown Work',  artisanNotes:'Kandabaranam with traditional stone-set Prabha frame — worn during festival processions.' },
+  { id:10, gid:'vmw-gold-10', deity:'Kanganam Bangle',         metal:'Gold Stone Setting',     purity:'22 Karat',  dims:'8cm × 6cm',   stone:'Emerald, CZ', duration:'15–20 days', origin:'Sowcarpet', img:'/gallery/gold/kanganam4.jpg',          cat:'Gold Work',   artisanNotes:'Deity wrist bangle with micro-pavé stone setting — four units per commission standard.' },
+  { id:11, gid:'vmw-gold-11', deity:'Sadari II',               metal:'24K Gold Nagas',         purity:'24 Karat',  dims:'20cm × 16cm', stone:'None',        duration:'45–60 days', origin:'Sowcarpet', img:encodeURIComponent('/gallery/gold/SADARI 2.jpg').replace(/%2F/g,'/'), cat:'Gold Work',   artisanNotes:'Second Sadari variant with wider Nagas flange — for Lakshmi and Saraswati forms.' },
+  { id:12, gid:'vmw-gold-12', deity:'Sur Kad Ornament',        metal:'Gold Copper Alloy',      purity:'Alloy',     dims:'18cm × 12cm', stone:'None',        duration:'25–35 days', origin:'Sowcarpet', img:'/gallery/gold/sur kad.png',            cat:'Gold Work',   artisanNotes:'Ear ornament set in traditional Thiru Sur Kad pattern — repousse hammered.' },
+  // ── Silver Work ─────────────────────────────────────────────
+  { id:13, gid:'vmw-silv-13', deity:'Kandabaranam Silver',     metal:'Sterling Silver',        purity:'92.5%',     dims:'32cm × 26cm', stone:'None',        duration:'45–60 days', origin:'Sowcarpet', img:'/gallery/silver/kandabaranam.jpg',     cat:'Silver Work', artisanNotes:'Silver Kandabaranam — Britannia silver sheet hand-chased and antique-finished.' },
+  // ── Stone Work ──────────────────────────────────────────────
+  { id:14, gid:'vmw-ston-14', deity:'Stone Piece I',           metal:'Stone · Gold Inlay',     purity:'Certified', dims:'40cm × 30cm', stone:'Granite',     duration:'90–120 days',origin:'Sowcarpet', img:'/gallery/stone/stone1.jpg',            cat:'Stone Work',  artisanNotes:'Granite sculpture with gold-inlay highlights on crown and jewelry points.' },
+  { id:15, gid:'vmw-ston-15', deity:'Stone Piece II',          metal:'Stone Setting',          purity:'Certified', dims:'38cm × 28cm', stone:'Granite',     duration:'90–120 days',origin:'Sowcarpet', img:'/gallery/stone/stone2.jpg',            cat:'Stone Work',  artisanNotes:'Full standing deity in Karnataka black granite — traditional Chola iconography.' },
+  { id:16, gid:'vmw-ston-16', deity:'Stone Piece III',         metal:'Precious Stone Work',    purity:'Certified', dims:'45cm × 32cm', stone:'Granite',     duration:'90–120 days',origin:'Sowcarpet', img:'/gallery/stone/stone3.jpg',            cat:'Stone Work',  artisanNotes:'Larger panel with multi-figure composition — temple gopuram decorative work.' },
+  { id:17, gid:'vmw-ston-17', deity:'Stone Piece IV',          metal:'Stone · Silver',         purity:'92.5% Silver', dims:'35cm × 25cm', stone:'Granite', duration:'75–90 days', origin:'Sowcarpet', img:'/gallery/stone/stone4.jpg',            cat:'Stone Work',  artisanNotes:'Deity with silver kavach overlay on stone base — combined stone-metal commission.' },
+  { id:18, gid:'vmw-ston-18', deity:'Kow Pathakkam',           metal:'Stone · Temple Gold',    purity:'22 Karat',  dims:'22cm × 18cm', stone:'Coral, Ruby', duration:'45–60 days', origin:'Sowcarpet', img:encodeURIComponent('/gallery/stone/kow pathakkam.png').replace(/%2F/g,'/'), cat:'Stone Work',  artisanNotes:'Cow motif pendant in stone and gold — Kamadhenu iconography for temple altars.' },
+  { id:19, gid:'vmw-ston-19', deity:'Kow Pa Ornament',         metal:'Stone Setting Deluxe',   purity:'Certified', dims:'14cm × 10cm', stone:'Coral, CZ',   duration:'30–40 days', origin:'Sowcarpet', img:encodeURIComponent('/gallery/stone/kow pa.jpg').replace(/%2F/g,'/'),       cat:'Stone Work',  artisanNotes:'Deluxe stone-set ornamental piece with 108 stones per traditional Agamic count.' },
+  { id:20, gid:'vmw-ston-20', deity:'Thamarai Poo',            metal:'Lotus Flower Stone',     purity:'Certified', dims:'16cm × 16cm', stone:'Pink Quartz',  duration:'25–35 days', origin:'Sowcarpet', img:encodeURIComponent('/gallery/stone/thamarai poo3.jpg').replace(/%2F/g,'/'), cat:'Stone Work',  artisanNotes:'Thamarai (lotus) in carved stone with hand-painted petal details.' },
+  // ── Temple Work ─────────────────────────────────────────────
+  { id:21, gid:'vmw-temp-21', deity:'Temple Deity',            metal:'Panchaloha Cast',        purity:'5-Metal Alloy', dims:'60cm × 40cm', stone:'None',   duration:'120–180 days',origin:'Sowcarpet', img:'/gallery/temple/god.jpg',              cat:'Vigraham',    artisanNotes:'Lost-wax cast Panchaloha vigraham — 5-metal alloy (gold, silver, copper, lead, iron). Consecrated before delivery.' },
+  { id:22, gid:'vmw-temp-22', deity:'Temple Ornament Set',     metal:'Full Temple Regalia',    purity:'Mixed',     dims:'Various',     stone:'Ruby, Emerald',duration:'90–150 days',origin:'Sowcarpet', img:'/gallery/temple/temple.jpg',           cat:'Vigraham',    artisanNotes:'Complete Alankara set — Kireedam, Kavach, Haram, Bangles, Padasara in matching design.' },
 ];
 
 const IMG = {
-  heroBg: '/vmw/product_01.jpg',   // not used (hero now uses logo)
-  gold:   '/vmw/product_20.jpg',   // sadarigold — gold sadari
-  silver: '/vmw/product_19.jpg',   // kasumalaithayar — silver necklace
-  copper: '/vmw/product_06.jpg',   // copper piece
-  brass:  '/vmw/product_23.jpg',   // brass work
-  pancha: '/vmw/product_09.jpg',   // panchaloha idol
-  idol:   '/vmw/product_11.jpg',   // idol work
-  vimana: '/vmw/product_08.jpg',   // vimana/tower piece
-  crown:  '/vmw/product_07.jpg',   // crown work
-  vessel: '/vmw/product_05.jpg',   // vessel work
-  temple: '/vmw/product_12.jpg',   // workshop/temple shot
-  prabha: '/vmw/product_03.jpg',   // prabhavali / arch piece
-  work1:  '/vmw/product_01.jpg',   // square showpiece
-  work2:  '/vmw/product_02.jpg',   // square showpiece 2
-  work3:  '/vmw/product_18.jpg',   // kanganam
-  work4:  '/vmw/product_15.jpg',   // SADARI
-  work5:  '/vmw/product_13.jpg',   // KASU MALAI
-  work6:  '/vmw/product_21.jpg',   // st dol
+  heroBg: '/gallery/gold/crown.jpg',
+  gold:   '/gallery/gold/sadarigold.jpg',
+  silver: '/gallery/silver/kandabaranam.jpg',
+  copper: '/gallery/gold/hand1.jpg',
+  brass:  '/gallery/stone/stone1.jpg',
+  pancha: '/gallery/temple/god.jpg',
+  idol:   '/gallery/temple/temple.jpg',
+  vimana: '/gallery/gold/crownn.jpg',
+  crown:  '/gallery/gold/crown.jpg',
+  vessel: '/gallery/stone/stone2.jpg',
+  temple: '/gallery/temple/temple.jpg',
+  prabha: '/gallery/gold/crown1.jpg',
+  work1:  '/gallery/gold/crown.jpg',
+  work2:  '/gallery/gold/crown1.jpg',
+  work3:  '/gallery/gold/kanganam4.jpg',
+  work4:  '/gallery/silver/kandabaranam.jpg',
+  work5:  '/gallery/gold/kandabaranam.jpg',
+  work6:  '/gallery/temple/god.jpg',
+};
+
+// Dynamic IMG hook — returns IMG overridden by Supabase site_images
+const useIMG = () => {
+  const SI = useSiteImg();
+  return {
+    heroBg: SI.hero_bg    || IMG.heroBg,
+    gold:   SI.service_gold   || IMG.gold,
+    silver: SI.service_silver || IMG.silver,
+    copper: SI.service_copper || IMG.copper,
+    brass:  SI.service_stone  || IMG.brass,
+    pancha: SI.service_pancha || IMG.pancha,
+    idol:   SI.showcase_main  || IMG.idol,
+    vimana: SI.service_vimana || IMG.vimana,
+    crown:  SI.craftwork_2    || IMG.crown,
+    vessel: SI.legacy_1       || IMG.vessel,
+    temple: SI.showcase_main  || IMG.temple,
+    prabha: SI.legacy_2       || IMG.prabha,
+    work1:  SI.work_1  || IMG.work1,
+    work2:  SI.work_2  || IMG.work2,
+    work3:  SI.work_3  || IMG.work3,
+    work4:  SI.work_4  || IMG.work4,
+    work5:  SI.work_5  || IMG.work5,
+    work6:  SI.work_6  || IMG.work6,
+    // process section
+    process1: SI.process_1 || '/gallery/gold/crown.jpg',
+    process2: SI.process_2 || '/gallery/gold/kandabaranam.jpg',
+    process3: SI.process_3 || '/gallery/stone/stone1.jpg',
+    // gallery preview
+    preview1: SI.preview_1 || '/gallery/gold/sadarigold.jpg',
+    preview2: SI.preview_2 || '/gallery/gold/crown.jpg',
+    preview3: SI.preview_3 || '/gallery/gold/kandabaranam.jpg',
+    preview4: SI.preview_4 || '/gallery/gold/crown1.jpg',
+    preview5: SI.preview_5 || '/gallery/stone/stone1.jpg',
+    preview6: SI.preview_6 || '/gallery/temple/god.jpg',
+  };
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -701,13 +1022,15 @@ const CurvyButton = ({ children, onClick, primary=false, style={} }) => {
 ═══════════════════════════════════════════════════════════════ */
 const SectionCTA = ({ primary="Commission a Piece", secondary="View Gallery", onPrimary, onSecondary }) => {
   const C = useTheme();
+  const navigate = useNavigate();
+  const { setShowCommissionModal } = useAppCtx();
   return (
   <Reveal delay={.15}>
     <div style={{ display:'flex', gap:14, flexWrap:'wrap', justifyContent:'center', marginTop:52, paddingTop:44, borderTop:`1px solid ${C.border}` }}>
-      <CurvyButton primary onClick={onPrimary || (()=>window.open(BIZ.whatsapp))}>
+      <CurvyButton primary onClick={onPrimary || (()=>setShowCommissionModal(true))}>
         {primary}
       </CurvyButton>
-      <StarBorderButton onClick={onSecondary || (()=>document.getElementById('contact')?.scrollIntoView({behavior:'smooth'}))} speed={6}>
+      <StarBorderButton onClick={onSecondary || (()=>navigate('/gallery'))} speed={6}>
         {secondary}
       </StarBorderButton>
     </div>
@@ -767,11 +1090,12 @@ const Grain = () => (
 ═══════════════════════════════════════════════════════════════ */
 const CraftworkPanel = () => {
   const C = useTheme();
+  const SI = useSiteImg();
   const PANEL_IMGS = [
-    { src:'/vmw/product_20.jpg', label:'Sadari Gold — 24K Nagas Work' },
-    { src:'/vmw/product_13.jpg', label:'Kasu Malai — Temple Jewellery' },
-    { src:'/vmw/product_19.jpg', label:'Kasumala — Silver Stone Setting' },
-    { src:'/vmw/product_22.jpg', label:'Kandabaranam — Crown Work' },
+    { src: SI.craftwork_1 || '/gallery/gold/sadarigold.jpg',   label:'Sadari Gold — 24K Nagas Work' },
+    { src: SI.craftwork_2 || '/gallery/gold/crown.jpg',         label:'Crown Work — Gold Handcrafted' },
+    { src: SI.craftwork_3 || '/gallery/gold/kanganam4.jpg',     label:'Kanganam — Gold Stone Setting' },
+    { src: SI.craftwork_4 || '/gallery/gold/kandabaranam.jpg',  label:'Kandabaranam — Crown Work' },
   ];
   const [active, setActive] = useState(0);
 
@@ -1078,6 +1402,7 @@ const LOGO_B64 = LOGO_NAV; // alias for navbar compatibility;
 ═══════════════════════════════════════════════════════════════ */
 const Nav = ({ scrolled }) => {
   const C = useTheme();
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [cardOpen, setCardOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
@@ -1121,8 +1446,8 @@ const Nav = ({ scrolled }) => {
       label: 'Gallery',
       bg: C.isDark ? '#0A1A14' : '#0D2218',
       links: [
-        { label: 'Showcase', id: 'showcase' },
-        { label: 'Photo Gallery', id: 'gallery' },
+        { label: 'Full Gallery', path: '/gallery' },
+        { label: 'Featured Works', id: 'gallery-preview' },
         { label: 'Archive', id: 'archive' },
       ]
     },
@@ -1137,10 +1462,16 @@ const Nav = ({ scrolled }) => {
     },
   ];
 
-  const scrollTo = (id) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-    setCardOpen(false);
-    setMenuOpen(false);
+  const scrollTo = (id, path) => {
+    if (path) {
+      navigate(path);
+      setCardOpen(false);
+      setMenuOpen(false);
+    } else {
+      document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+      setCardOpen(false);
+      setMenuOpen(false);
+    }
   };
 
   // Deep luxury backgrounds
@@ -1281,7 +1612,7 @@ const Nav = ({ scrolled }) => {
 
             {/* Logo — centred absolutely */}
             <button
-              onClick={() => scrollTo('home')}
+              onClick={() => navigate('/')}
               style={{
                 background: 'none', border: 'none', cursor: 'pointer',
                 position: 'absolute', left: '50%', transform: 'translateX(-50%)',
@@ -1383,7 +1714,7 @@ const Nav = ({ scrolled }) => {
                         {card.links.map(lnk => (
                           <button
                             key={lnk.label}
-                            onClick={() => scrollTo(lnk.id)}
+                            onClick={() => scrollTo(lnk.id, lnk.path)}
                             style={{
                               background: 'none', border: 'none', cursor: 'pointer',
                               textAlign: 'left', padding: '6px 8px',
@@ -1463,7 +1794,7 @@ const Nav = ({ scrolled }) => {
                   {card.links.map(lnk => (
                     <button
                       key={lnk.label}
-                      onClick={() => { scrollTo(lnk.id); setMenuOpen(false); }}
+                      onClick={() => { scrollTo(lnk.id, lnk.path); setMenuOpen(false); }}
                       style={{
                         width: '100%', background: 'none', border: 'none',
                         textAlign: 'left', padding: '14px 16px',
@@ -1508,6 +1839,8 @@ const Nav = ({ scrolled }) => {
 ═══════════════════════════════════════════════════════════════ */
 const Hero = () => {
   const C = useTheme();
+  const navigate = useNavigate();
+  const { setShowCommissionModal } = useAppCtx();
   const ref = useRef(null);
   const { scrollYProgress } = useScroll({ target:ref, offset:['start start','end start'] });
   // Reduced parallax range for performance
@@ -1571,8 +1904,8 @@ const Hero = () => {
         </motion.p>
         <motion.div initial={{opacity:0,y:18}} animate={{opacity:1,y:0}} transition={{duration:1,delay:3.05}}
           style={{display:'flex',gap:24,justifyContent:'center',flexWrap:'wrap',alignItems:'center',marginTop:24}}>
-          <CurvyButton primary onClick={()=>document.getElementById('gallery')?.scrollIntoView({behavior:'smooth'})}>View Our Work</CurvyButton>
-          <StarBorderButton onClick={()=>window.open(BIZ.whatsapp)} speed={5}>Commission Now</StarBorderButton>
+          <CurvyButton primary onClick={()=>navigate('/gallery')}>View Our Work</CurvyButton>
+          <StarBorderButton onClick={()=>setShowCommissionModal(true)} speed={5}>Commission Now</StarBorderButton>
         </motion.div>
       </motion.div>
       <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{delay:4,duration:1}}
@@ -1590,11 +1923,13 @@ const Hero = () => {
 ═══════════════════════════════════════════════════════════════ */
 const Legacy = () => {
   const C = useTheme();
+  const { setShowCommissionModal } = useAppCtx();
+  const [hoveredStat, setHoveredStat] = useState(null);
   const stats = [
-    { n:'110+', l:'Years of Legacy' },
-    { n:'2000+', l:'Temples Adorned' },
-    { n:'5', l:'Metal Specialities' },
-    { n:'24K', l:'Gold Certified' },
+    { n:'110+', l:'Years of Legacy',     icon:'🏛' },
+    { n:'2000+', l:'Temples Adorned',    icon:'⛩' },
+    { n:'5',    l:'Metal Specialities',  icon:'⚜' },
+    { n:'24K',  l:'Gold Certified',      icon:'✦' },
   ];
   return (
     <section id="legacy" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg2}}>
@@ -1614,22 +1949,73 @@ const Legacy = () => {
             </p>
           </SlideRight>
         </div>
+
+        {/* STATS — gold shine on hover */}
+        <style>{`
+          .stat-card { position:relative; overflow:hidden; transition:all 0.4s cubic-bezier(0.16,1,0.3,1); cursor:default; }
+          .stat-card::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(255,215,0,0) 0%,rgba(255,215,0,0.06) 50%,rgba(255,215,0,0) 100%); opacity:0; transition:opacity 0.4s; }
+          .stat-card:hover::before { opacity:1; }
+          .stat-number { transition:all 0.35s cubic-bezier(0.16,1,0.3,1); }
+          .stat-card:hover .stat-number {
+            color:#FFD700 !important;
+            text-shadow:0 0 40px rgba(255,215,0,0.6), 0 0 80px rgba(255,215,0,0.3), 0 2px 8px rgba(0,0,0,0.8) !important;
+            transform:scale(1.08);
+          }
+          .stat-label { transition:color 0.35s; }
+          .stat-card:hover .stat-label { color:rgba(255,215,0,0.75) !important; }
+        `}</style>
+
         <StaggerContainer stagger={0.13} delay={0.1} style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:2}}>
           {stats.map((s,i)=>{
             const Item = i % 2 === 0 ? StaggerItemLeft : StaggerItemRight;
             return (
-            <Item key={s.l}>
-              <motion.div whileHover={{background:C.surfaceWarm, y:-4, boxShadow:`0 8px 32px rgba(0,0,0,0.18)`}}
-                style={{padding:'46px 30px',border:`1px solid ${C.border}`,textAlign:'center',transition:'background .45s, box-shadow .45s'}}>
-                <div style={{...ff.display,fontSize:46,color:C.text,fontWeight:700,lineHeight:1,marginBottom:10}}>{s.n}</div>
-                <div style={{...ff.body,fontSize:8,letterSpacing:'.3em',color:C.dim,fontWeight:600,textTransform:'uppercase'}}>{s.l}</div>
-              </motion.div>
-            </Item>
+              <Item key={s.l}>
+                <div
+                  className="stat-card"
+                  onMouseEnter={()=>setHoveredStat(s.l)}
+                  onMouseLeave={()=>setHoveredStat(null)}
+                  style={{
+                    padding:'52px 30px 48px',
+                    border:`1px solid ${hoveredStat===s.l ? 'rgba(255,215,0,0.4)' : C.border}`,
+                    textAlign:'center',
+                    background: hoveredStat===s.l ? C.surfaceWarm : 'transparent',
+                    boxShadow: hoveredStat===s.l ? '0 12px 48px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,215,0,0.08)' : 'none',
+                    transform: hoveredStat===s.l ? 'translateY(-6px)' : 'none',
+                  }}
+                >
+                  <div style={{fontSize:22,marginBottom:14,opacity:hoveredStat===s.l?1:0.4,transition:'opacity 0.3s'}}>{s.icon}</div>
+                  <div
+                    className="stat-number"
+                    style={{
+                      ...ff.display,
+                      fontSize:'clamp(52px,5.5vw,76px)',
+                      color: hoveredStat===s.l ? '#FFD700' : C.text,
+                      fontWeight:700,
+                      lineHeight:1,
+                      marginBottom:14,
+                      display:'block',
+                    }}
+                  >{s.n}</div>
+                  <div
+                    className="stat-label"
+                    style={{
+                      ...ff.body,
+                      fontSize:12,
+                      letterSpacing:'.22em',
+                      color: hoveredStat===s.l ? 'rgba(255,215,0,0.75)' : 'rgba(255,255,255,0.65)',
+                      fontWeight:600,
+                      textTransform:'uppercase',
+                      lineHeight:1.4,
+                    }}
+                  >{s.l}</div>
+                </div>
+              </Item>
             );
           })}
         </StaggerContainer>
+
         <SectionCTA primary="Start Your Commission" secondary="Enquire on WhatsApp"
-          onPrimary={()=>document.getElementById('contact')?.scrollIntoView({behavior:'smooth'})}
+          onPrimary={()=>setShowCommissionModal(true)}
           onSecondary={()=>window.open(BIZ.whatsapp)}/>
       </div>
     </section>
@@ -1642,14 +2028,14 @@ const Legacy = () => {
 const TrustedByTemples = () => {
   const C = useTheme();
   const temples = [
-    { name:'Meenakshi Amman', loc:'Madurai', img:'/vmw/product_20.jpg' },
-    { name:'Brihadeeswarar', loc:'Thanjavur', img:'/vmw/product_13.jpg' },
-    { name:'Srirangam Temple', loc:'Trichy', img:'/vmw/product_19.jpg' },
-    { name:'Tirumala Tirupati', loc:'Andhra Pradesh', img:'/vmw/product_15.jpg' },
-    { name:'Murugan Temple', loc:'London, UK', img:'/vmw/product_18.jpg' },
-    { name:'Golden Temple', loc:'Vellore', img:'/vmw/product_22.jpg' },
-    { name:'Nataraja Temple', loc:'Chidambaram', img:'/vmw/product_09.jpg' },
-    { name:'Kapaleeswarar', loc:'Chennai', img:'/vmw/product_01.jpg' },
+    { name:'Meenakshi Amman', loc:'Madurai', img:'/gallery/gold/sadarigold.jpg' },
+    { name:'Brihadeeswarar', loc:'Thanjavur', img:'/gallery/gold/crown.jpg' },
+    { name:'Srirangam Temple', loc:'Trichy', img:'/gallery/stone/stone1.jpg' },
+    { name:'Tirumala Tirupati', loc:'Andhra Pradesh', img:'/gallery/silver/kandabaranam.jpg' },
+    { name:'Murugan Temple', loc:'London, UK', img:'/gallery/gold/kanganam4.jpg' },
+    { name:'Golden Temple', loc:'Vellore', img:'/gallery/gold/kandabaranam.jpg' },
+    { name:'Nataraja Temple', loc:'Chidambaram', img:'/gallery/temple/god.jpg' },
+    { name:'Kapaleeswarar', loc:'Chennai', img:'/gallery/temple/temple.jpg' },
   ];
   return (
     <section style={{position:'relative',zIndex:2,padding:'100px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
@@ -1711,10 +2097,12 @@ const TrustedByTemples = () => {
 ═══════════════════════════════════════════════════════════════ */
 const Services = () => {
   const C = useTheme();
+  const navigate = useNavigate();
   const [active, setActive] = useState(0);
+  const DI = useIMG();
   const metals = [
     {
-      name:'Gold Work', accent:'#FFD700', img:'/vmw/product_20.jpg', icon:'✦',
+      name:'Gold Work', accent:'#FFD700', img: DI.gold, icon:'✦',
       badge:'24K · Nagas · Stone · Electro Plating',
       desc:'The pinnacle of temple metalcraft — pure 24K gold worked by hand using century-old Chola techniques alongside modern European electro-plating technology.',
       services:[
@@ -1724,7 +2112,7 @@ const Services = () => {
       ],
     },
     {
-      name:'Silver Work', accent:'#B8C0CC', img:'/vmw/product_19.jpg', icon:'◈',
+      name:'Silver Work', accent:'#B8C0CC', img: DI.silver, icon:'◈',
       badge:'Pure Silver · Nagas · Stone',
       desc:'Sterling silver temple metalcraft — hand-beaten and stone-set for idols, crowns, vessels, and architectural temple elements.',
       services:[
@@ -1733,7 +2121,7 @@ const Services = () => {
       ],
     },
     {
-      name:'Copper Work', accent:'#B87333', img:'/vmw/product_06.jpg', icon:'❋',
+      name:'Copper Work', accent:'#B87333', img: DI.copper, icon:'❋',
       badge:'Nagas · Electro · Gold Foil · Polishing',
       desc:'Copper is the preferred base metal for large temple structures. We offer the full spectrum — from hand-beaten nagas work to European electro gold plating with decade-long guarantees.',
       services:[
@@ -1745,7 +2133,7 @@ const Services = () => {
       ],
     },
     {
-      name:'Brass Work', accent:'#B09830', img:'/vmw/product_23.jpg', icon:'◉',
+      name:'Brass Work', accent:'#B09830', img: DI.brass, icon:'◉',
       badge:'Polish · Nagas · Lattice Work',
       desc:'Brass temple pieces — lamps, bells, panels — restored to their original lustre through specialist polishing and traditional nagas lattice craftsmanship.',
       services:[
@@ -1754,7 +2142,7 @@ const Services = () => {
       ],
     },
     {
-      name:'Panchaloha', accent:'#C8B88A', img:'/vmw/product_09.jpg', icon:'⬡',
+      name:'Panchaloha', accent:'#C8B88A', img: DI.pancha, icon:'⬡',
       badge:'5-Metal Sacred Alloy · Divine Idols',
       desc:'Panchaloha — the sacred five-metal alloy of Gold, Silver, Copper, Iron, and Lead — prescribed by the Agamas as the only appropriate material for consecrated divine idols.',
       services:[
@@ -1823,7 +2211,7 @@ const Services = () => {
         </AnimatePresence>
         <SectionCTA primary="Request a Quote" secondary="See Our Work"
           onPrimary={()=>document.getElementById('contact')?.scrollIntoView({behavior:'smooth'})}
-          onSecondary={()=>document.getElementById('gallery')?.scrollIntoView({behavior:'smooth'})}/>
+          onSecondary={()=>navigate('/gallery')}/>
       </div>
     </section>
   );
@@ -1834,6 +2222,8 @@ const Services = () => {
 ═══════════════════════════════════════════════════════════════ */
 const Showcase = () => {
   const C = useTheme();
+  const navigate = useNavigate();
+  const { setShowCommissionModal } = useAppCtx();
   return (
   <section id="showcase" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
     <div style={{maxWidth:1240,margin:'0 auto'}}>
@@ -1849,8 +2239,8 @@ const Showcase = () => {
             Every piece that leaves Murugappa Street carries a century's devotion.
           </p>
           <div style={{marginTop:36,display:'flex',gap:14,flexWrap:'wrap'}}>
-            <CurvyButton primary onClick={()=>document.getElementById('gallery')?.scrollIntoView({behavior:'smooth'})}>View Gallery</CurvyButton>
-            <StarBorderButton onClick={()=>window.open(BIZ.whatsapp)} speed={7}>Commission</StarBorderButton>
+            <CurvyButton primary onClick={()=>navigate('/gallery')}>View Gallery</CurvyButton>
+            <StarBorderButton onClick={()=>setShowCommissionModal(true)} speed={7}>Commission</StarBorderButton>
           </div>
         </SlideLeft>
         <SlideRight delay={.12}>
@@ -1878,13 +2268,15 @@ const Showcase = () => {
 ═══════════════════════════════════════════════════════════════ */
 const RealWorkPhotos = () => {
   const C = useTheme();
+  const { setShowCommissionModal } = useAppCtx();
+  const DI = useIMG();
   const photos = [
-    { img:'/vmw/product_01.jpg', label:'Sacred Showpiece', desc:'Handcrafted ornamental work — showpiece commissioned for temple display, Sowcarpet workshop, 2023' },
-    { img:'/vmw/product_02.jpg', label:'Gold Crown Piece', desc:'24K gold nagas work crown — commissioned for a major Chennai temple, 2022' },
-    { img:'/vmw/product_20.jpg', label:'Sadari Gold Set', desc:'Pure gold sadari crown — traditional nagas craftsmanship, stone setting, 2023' },
-    { img:'/vmw/product_15.jpg', label:'Silver Sadari', desc:'Sterling silver sadari — hand-beaten nagas work with stone inlay, Sowcarpet, 2021' },
-    { img:'/vmw/product_13.jpg', label:'Kasu Malai Gold', desc:'Temple gold jewellery — traditional kasu malai crown, 24K gold finish, 2024' },
-    { img:'/vmw/product_18.jpg', label:'Kanganam Bangle', desc:'Gold-plated copper kanganam — lattice nagas work, London Murugan Temple, 2023' },
+    { img: DI.work1, label:'Gold Crown Piece',    desc:'Handcrafted gold crown — traditional nagas craftsmanship, commissioned for a major Chennai temple, 2023.' },
+    { img: DI.work2, label:'Sadari Gold Set',     desc:'Pure gold sadari crown — traditional nagas work, stone setting by our Sowcarpet master artisans, 2023.' },
+    { img: DI.work3, label:'Kanganam Gold',       desc:'Gold stone-set kanganam bangle — lattice nagas work for a temple in London, 2023.' },
+    { img: DI.work4, label:'Silver Kandabaranam', desc:'Sterling silver kandabaranam — hand-beaten nagas work, traditional Agamic specifications, 2022.' },
+    { img: DI.work5, label:'Stone Inlay Piece',   desc:'Temple jewellery with precious stone setting — gold inlay and stone work from our Sowcarpet workshop, 2024.' },
+    { img: DI.work6, label:'Panchaloha Vigraham', desc:'Authentic Panchaloha deity — cast and finished to full Agamic temple specifications, 2023.' },
   ];
   return (
     <section style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
@@ -1911,8 +2303,8 @@ const RealWorkPhotos = () => {
           })}
         </StaggerContainer>
         <SectionCTA primary="Commission Your Piece" secondary="Contact Us"
-          onPrimary={()=>window.open(BIZ.whatsapp)}
-          onSecondary={()=>document.getElementById('contact')?.scrollIntoView({behavior:'smooth'})}/>
+          onPrimary={()=>setShowCommissionModal(true)}
+          onSecondary={()=>window.open(BIZ.whatsapp)}/>
       </div>
     </section>
   );
@@ -1986,13 +2378,15 @@ const ProcessIcon = ({ n, icon, gold, dim, border, surfaceGold }) => (
 
 const ProcessSection = () => {
   const C = useTheme();
+  const { setShowCommissionModal } = useAppCtx();
+  const DI = useIMG();
   const steps = [
-    { n:'01', title:'Initial Inquiry',       icon:'💬', img:'/vmw/product_16.jpg', desc:'Share your requirement via WhatsApp or our contact form — temple name, deity, dimensions, metal preference, and timeline.' },
-    { n:'02', title:'Design Consultation',   icon:'✏️', img:'/vmw/product_12.jpg', desc:'Our master craftsmen discuss design specifications, iconographic details per Agamic tradition, and provide a detailed quotation.' },
-    { n:'03', title:'Material Procurement',  icon:'⚱️', img:'/vmw/product_04.jpg', desc:'We source hallmarked metals — 24K gold, sterling silver, Panchaloha alloy — from certified suppliers as per your chosen specification.' },
-    { n:'04', title:'Sacred Crafting',       icon:'🔨', img:'/vmw/product_09.jpg', desc:'Hand-crafted by our master artisans at our Sowcarpet workshop using ancestral techniques passed down through generations since 1915.' },
-    { n:'05', title:'Quality Inspection',    icon:'🔍', img:'/vmw/product_20.jpg', desc:'Every piece undergoes rigorous quality inspection — dimensions, finish, stone setting, and metal purity verified against commissioned specifications.' },
-    { n:'06', title:'Delivery & Blessing',   icon:'📦', img:'/vmw/product_01.jpg', desc:'Safely packed and shipped or hand-delivered to your temple anywhere in India or internationally. Documentation provided for customs.' },
+    { n:'01', title:'Initial Inquiry',       icon:'💬', img: DI.process1,  desc:'Share your requirement via WhatsApp or our contact form — temple name, deity, dimensions, metal preference, and timeline.' },
+    { n:'02', title:'Design Consultation',   icon:'✏️', img: DI.process2,  desc:'Our master craftsmen discuss design specifications, iconographic details per Agamic tradition, and provide a detailed quotation.' },
+    { n:'03', title:'Material Procurement',  icon:'⚱️', img: DI.process3,  desc:'We source hallmarked metals — 24K gold, sterling silver, Panchaloha alloy — from certified suppliers as per your chosen specification.' },
+    { n:'04', title:'Sacred Crafting',       icon:'🔨', img: DI.work3,     desc:'Hand-crafted by our master artisans at our Sowcarpet workshop using ancestral techniques passed down through generations since 1915.' },
+    { n:'05', title:'Quality Inspection',    icon:'🔍', img: DI.work1,     desc:'Every piece undergoes rigorous quality inspection — dimensions, finish, stone setting, and metal purity verified against commissioned specifications.' },
+    { n:'06', title:'Delivery & Blessing',   icon:'📦', img: DI.temple,    desc:'Safely packed and shipped or hand-delivered to your temple anywhere in India or internationally. Documentation provided for customs.' },
   ];
 
   return (
@@ -2023,6 +2417,21 @@ const ProcessSection = () => {
             transform:'translateX(-50%)',
             zIndex:0,
           }}/>
+          
+          <motion.div
+            initial={{ height: 0 }}
+            whileInView={{ height: '100%' }}
+            viewport={{ once: true, margin: '-20%' }}
+            transition={{ duration: 2.5, ease: 'easeInOut' }}
+            style={{
+              position:'absolute', left:'50%', top:40,
+              width:2,
+              background:C.goldGrad,
+              transform:'translateX(-50%)',
+              zIndex:0,
+              boxShadow: `0 0 12px ${C.gold}66`
+            }}
+          />
 
           {steps.map((step, i) => {
             const isLeft = i % 2 === 0; // even = content left, image right
@@ -2043,10 +2452,11 @@ const ProcessSection = () => {
                 }}
               >
                 {/* Left cell — content or image depending on index */}
-                <div style={{
-                  padding: isLeft ? '0 44px 0 0' : '0 0 0 44px',
-                  gridColumn: isLeft ? 1 : 3,
+                <div className={isLeft ? "vmw-process-content" : "vmw-process-img"} style={{
+                  padding: isLeft ? '0 44px 0 0' : '0 44px 0 0',
+                  gridColumn: 1,
                   gridRow: 1,
+                  display: 'flex', justifyContent: 'flex-end', width: '100%'
                 }}>
                   {isLeft ? (
                     /* Content block */
@@ -2076,7 +2486,7 @@ const ProcessSection = () => {
                 </div>
 
                 {/* Centre — step node */}
-                <div style={{
+                <div className="vmw-process-node" style={{
                   gridColumn:2, gridRow:1,
                   display:'flex', justifyContent:'center', alignItems:'center',
                   zIndex:2, position:'relative',
@@ -2100,10 +2510,11 @@ const ProcessSection = () => {
                 </div>
 
                 {/* Right cell */}
-                <div style={{
-                  padding: isLeft ? '0 0 0 44px' : '0 44px 0 0',
-                  gridColumn: isLeft ? 3 : 1,
+                <div className={isLeft ? "vmw-process-img" : "vmw-process-content"} style={{
+                  padding: isLeft ? '0 0 0 44px' : '0 0 0 44px',
+                  gridColumn: 3,
                   gridRow: 1,
+                  display: 'flex', justifyContent: 'flex-start', width: '100%'
                 }}>
                   {isLeft ? (
                     /* Image side */
@@ -2136,7 +2547,7 @@ const ProcessSection = () => {
         </div>
 
         <SectionCTA primary="Begin Your Project" secondary="Ask a Question"
-          onPrimary={()=>document.getElementById('contact')?.scrollIntoView({behavior:'smooth'})}
+          onPrimary={()=>setShowCommissionModal(true)}
           onSecondary={()=>window.open(BIZ.whatsapp)}/>
       </div>
     </section>
@@ -2153,7 +2564,7 @@ const ProcessTimelineImage = ({ src, alt, C }) => {
       whileHover={{ scale:1.01 }}
       transition={{ duration:.45, ease:[.16,1,.3,1] }}
       style={{
-        position:'relative', aspectRatio:'4/3', overflow:'hidden',
+        position:'relative', width: '100%', aspectRatio:'4/3', overflow:'hidden',
         border:`1px solid ${hov ? C.borderHi : C.border}`,
         background: C.bg2,
         transition:'border-color .3s',
@@ -2350,23 +2761,78 @@ const PremiumFilterTabs = ({ filters, active, onChange, C }) => {
 /* ═══════════════════════════════════════════════════════════════
    GALLERY (with skeleton loading + metal filter)
 ═══════════════════════════════════════════════════════════════ */
-const Gallery = () => {
+const Gallery = ({ isFullPage = false, onSelect, initialSelected = null }) => {
   const C = useTheme();
-  const [selected, setSelected] = useState(null);
-  const [liked, setLiked] = useState({});
+  const [selected, setSelected] = useState(initialSelected);
+  const userState = getUserState();
+  const [liked, setLiked] = useState(userState.likes);
+  const [saved, setSaved] = useState(userState.saves);
   const [hovered, setHovered] = useState(null);
   const [likeAnim, setLikeAnim] = useState({});
   const [loadedImages, setLoadedImages] = useState({});
   const [activeFilter, setActiveFilter] = useState('All');
+  const [comments, setComments] = useState(userState.comments);
+  const [commentInput, setCommentInput] = useState('');
+  const [showComments, setShowComments] = useState(false);
+  const [liveItems, setLiveItems] = useState([]);
+  const { isLoggedIn, user, setShowAuthModal, setAuthAction: setGlobalAuthAction, setShowCommissionModal } = useAppCtx();
+  const userId = user?.id || 'guest';
   const dockRef = useRef(null);
   const [mouseX, setMouseX] = useState(null);
   const DOCK_ITEM_W = 68;
 
-  const FILTERS = ['All','Gold Work','Silver Work','Copper Work','Brass Work','Panchaloha','Electro Gold','Vigraham'];
+  // FIX: Fetch admin-uploaded items from Supabase with proper cancellation
+  useEffect(() => {
+    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+    const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) return;
+    let cancelled = false;
+    fetch(`${supabaseUrl}/rest/v1/gallery_items?select=*&order=created_at.desc`, {
+      headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
+    })
+    .then(r => r.ok ? r.json() : [])
+    .then(rows => {
+      if (cancelled) return;
+      const valid = (rows || []).filter(r => r.image_url && r.image_url.length > 0);
+      // Map all admin-editable fields so changes in admin panel reflect immediately
+      const mapped = valid.map(r => ({
+        id: r.id, gid: r.id,
+        deity: r.title,                          // Caption / Title set in admin
+        metal: r.metal_type || '',
+        purity: r.purity || '',
+        dims: r.dimensions || '',
+        stone: r.stone_type || '',
+        duration: r.crafting_duration || '',
+        origin: 'Sowcarpet',
+        img: r.image_url,
+        cat: r.category || 'Gold Work',
+        artisanNotes: r.artisan_notes || '',
+        description: r.description || '',        // Caption/description edited in admin
+        isFeatured: r.is_featured || false,
+        _isUploaded: true,
+      }));
+      setLiveItems(mapped);
+    })
+    .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
-  const filteredIdols = activeFilter === 'All'
-    ? GALLERY_IDOLS
-    : GALLERY_IDOLS.filter(i => i.cat === activeFilter || i.metal.toLowerCase().includes(activeFilter.toLowerCase().split(' ')[0]));
+  // Merge: DB rows override static ones (deduplicate by normalized URL)
+  const normalizeUrl = (u) => decodeURIComponent(u || '').replace(/\s+/g,' ').trim();
+  const allIdols = useMemo(() => {
+    const uploadedUrls = new Set(liveItems.map(i => normalizeUrl(i.img)));
+    const staticOnly = GALLERY_IDOLS.filter(i => !uploadedUrls.has(normalizeUrl(i.img)));
+    return [...staticOnly, ...liveItems];
+  }, [liveItems]);
+
+  const FILTERS = ['All','Gold Work','Crown Work','Silver Work','Stone Work','Vigraham'];
+
+  // FIX: useMemo — prevents new array ref every render which caused infinite loops downstream
+  const filteredIdols = useMemo(() =>
+    activeFilter === 'All'
+      ? allIdols
+      : allIdols.filter(i => i.cat === activeFilter || i.metal.toLowerCase().includes(activeFilter.toLowerCase().split(' ')[0])),
+  [allIdols, activeFilter]);
 
   const getDockScale = idx => {
     if (mouseX===null) return 1;
@@ -2377,14 +2843,64 @@ const Gallery = () => {
     return 1+(1-dist/maxDist)*0.65;
   };
 
-  const handleLike = (id,e) => {
+  const handleLike = (idol, e) => {
     e.stopPropagation();
-    setLiked(prev=>({...prev,[id]:!prev[id]}));
-    setLikeAnim(prev=>({...prev,[id]:true}));
-    setTimeout(()=>setLikeAnim(prev=>({...prev,[id]:false})),600);
+    const gid = idol.gid;
+    const wasLiked = liked[gid];
+    setLiked(prev=>({...prev,[gid]:!prev[gid]}));
+    setLikeAnim(prev=>({...prev,[idol.id]:true}));
+    setTimeout(()=>setLikeAnim(prev=>({...prev,[idol.id]:false})),600);
+    // Persist to localStorage + Supabase
+    const state = getUserState();
+    state.likes[gid] = !wasLiked;
+    setUserState(state);
+    if (userId !== 'guest') toggleIdolLike(gid, userId, wasLiked);
+  };
+
+  const handleSave = (idol, e) => {
+    e.stopPropagation();
+    if (!isLoggedIn) { setGlobalAuthAction('save'); setShowAuthModal(true); return; }
+    const gid = idol.gid;
+    const wasSaved = saved[gid];
+    setSaved(prev => ({...prev,[gid]:!prev[gid]}));
+    const state = getUserState();
+    state.saves[gid] = !wasSaved;
+    setUserState(state);
+    toggleIdolSave(gid, userId, wasSaved);
+  };
+
+  const handleAddComment = (idol, e) => {
+    e.stopPropagation();
+    if (!isLoggedIn) { setGlobalAuthAction('comment'); setShowAuthModal(true); return; }
+    if (!commentInput.trim()) return;
+    const id = idol.id;
+    const gid = idol.gid;
+    const text = commentInput.trim();
+    setComments(prev => ({
+      ...prev,
+      [id]: [...(prev[id]||[]), { text, time: new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short'}) }]
+    }));
+    // Persist to Supabase
+    addIdolComment(gid, userId, text);
+    CACHE.delete(`comments_${gid}`);
+    setCommentInput('');
   };
 
   const sel = selected!==null ? GALLERY_IDOLS.find(i=>i.id===selected) : null;
+
+  // Keyboard navigation for lightbox
+  useEffect(() => {
+    const handler = (e) => {
+      if (selected === null) return;
+      if (e.key === 'Escape') { setSelected(null); setShowComments(false); setCommentInput(''); }
+      if (e.key === 'ArrowLeft')  handlePrev({ stopPropagation: ()=>{} });
+      if (e.key === 'ArrowRight') handleNext({ stopPropagation: ()=>{} });
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  // FIX: Use filteredIdols.length as dep instead of the array itself
+  // The effect only cares about whether `selected` still exists in the list
+  }, [selected, filteredIdols.length]);
 
   const handlePrev = (e) => {
     e.stopPropagation();
@@ -2403,42 +2919,104 @@ const Gallery = () => {
     setSelected(filteredIdols[nextIndex].id);
   };
 
+  // Swipe gesture detection for mobile
+  const [touchStart, setTouchStart] = useState(null);
+  const handleTouchStart = (e) => {
+    setTouchStart(e.touches[0].clientX);
+  };
+  const handleTouchEnd = (e) => {
+    if (!touchStart) return;
+    const touchEnd = e.changedTouches[0].clientX;
+    const diff = touchStart - touchEnd;
+    // Swipe left = next, Swipe right = prev
+    if (Math.abs(diff) > 60) {
+      if (diff > 0) handleNext({ stopPropagation: () => {} });
+      else handlePrev({ stopPropagation: () => {} });
+    }
+    setTouchStart(null);
+  };
+
+  // Calculate current image index
+  const currentImageIndex = selected !== null ? filteredIdols.findIndex(i => i.id === selected) : -1;
+  const totalImages = filteredIdols.length;
+
   return (
-    <section id="gallery" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
+    <section id="gallery" style={{position:'relative',zIndex:2,paddingTop:'140px',paddingBottom:'60px',background:C.bg2,borderTop:`1px solid ${C.border}`,overflow:'hidden'}}>
+      {/* Parallax Background Glow */}
+      <motion.div 
+        style={{
+          position:'absolute',
+          top:0,
+          left:'50%',
+          transform:'translateX(-50%)',
+          width:'140%',
+          height:'100%',
+          background:'radial-gradient(ellipse 120% 80% at 50% 20%, rgba(255,215,0,0.06) 0%, transparent 60%)',
+          zIndex:-1,
+          pointerEvents:'none'
+        }}
+        initial={{ opacity: 0, scale: 0.8 }}
+        whileInView={{ opacity: 1, scale: 1 }}
+        viewport={{ once: false, margin: '-200px' }}
+        transition={{ duration: 1.2, ease: [0.16, 1, 0.3, 1] }}
+      />
+      
       <AnimatePresence>
         {selected!==null && (
           <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
             style={{position:'absolute',inset:0,pointerEvents:'none',zIndex:0,background:'radial-gradient(ellipse 80% 60% at 50% 40%,rgba(255,215,0,0.04) 0%,transparent 70%)'}}/>
         )}
       </AnimatePresence>
-      <div style={{maxWidth:1240,margin:'0 auto',position:'relative',zIndex:1}}>
+      
+      <div style={{maxWidth:1240,margin:'0 auto',position:'relative',zIndex:1,padding:'0 56px'}}>
         <Reveal>
-          <div style={{textAlign:'center',marginBottom:64}}>
+          <motion.div 
+            style={{textAlign:'center',marginBottom:64}}
+            initial={{ opacity: 0, y: 30 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, margin: '-100px' }}
+            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          >
             <span style={{...ff.body,fontSize:8,letterSpacing:'.52em',color:C.dim,fontWeight:600,textTransform:'uppercase',display:'block',marginBottom:16,opacity:.8}}>Sacred Collection</span>
             <h2 style={{...ff.display,fontSize:'clamp(34px,6.5vw,82px)',lineHeight:.88,letterSpacing:'.045em',color:C.text,fontWeight:700}}>
               THE <span style={{color:C.gold}}>GALLERY</span>
             </h2>
             <p style={{...ff.serif,fontSize:15,color:C.dim,fontStyle:'italic',marginTop:16}}>Tap any idol to explore · Like your favourites</p>
-          </div>
+          </motion.div>
         </Reveal>
 
         {/* ── Premium Gallery Filter Tabs ── */}
         <Reveal delay={.08}>
-          <div style={{display:'flex',justifyContent:'center',marginBottom:40}}>
+          <motion.div 
+            style={{display:'flex',justifyContent:'center',marginBottom:40}}
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, margin: '-80px' }}
+            transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          >
             <PremiumFilterTabs
               filters={FILTERS}
               active={activeFilter}
               onChange={f=>{setActiveFilter(f);setSelected(null);}}
               C={C}
             />
-          </div>
+          </motion.div>
         </Reveal>
-        {/* ── MASONRY GALLERY — fixed ── */}
+        {/* ── PREMIUM MASONRY GALLERY — Cinematic Edition ── */}
         <style>{`
+          /* ═══════════════════════════════════════════════════════════
+             PREMIUM CINEMA MASONRY LAYOUT
+             - Varied heights like Pinterest/Awwwards luxury portfolios
+             - Cinematic spacing and composition
+             - Blur-to-sharp image transitions
+             - Floating glow effects
+             - Parallax-ready structure
+             ═══════════════════════════════════════════════════════════ */
+
           /* ─── Container ─────────────────────────────── */
           .vmw-masonry {
             columns: 4;
-            column-gap: 10px;
+            column-gap: 16px;
             orphans: 1;
             widows: 1;
           }
@@ -2450,71 +3028,92 @@ const Gallery = () => {
             break-inside: avoid;
             -webkit-column-break-inside: avoid;
             page-break-inside: avoid;
-            margin-bottom: 10px;
+            margin-bottom: 16px;
             position: relative;
             overflow: hidden;
-            border-radius: 7px;
+            border-radius: 12px;
             cursor: pointer;
             vertical-align: top;
-            background: #1a1208;
-            /* Lift + shadow on hover */
+            background: linear-gradient(135deg, #1a1208 0%, #0e0b06 100%);
+            /* Cinematic lift + glow on hover */
             transition:
-              transform .42s cubic-bezier(.16,1,.3,1),
-              box-shadow .42s cubic-bezier(.16,1,.3,1),
-              border-color .28s ease;
-            will-change: transform, box-shadow;
+              transform .48s cubic-bezier(.16,1,.3,1),
+              box-shadow .48s cubic-bezier(.16,1,.3,1),
+              border-color .32s ease;
+            will-change: transform, box-shadow, filter;
+            border: 1px solid rgba(255,215,0,0.08);
           }
 
-          /* Lift effect */
+          /* Premium hover state with glow */
           .vmw-masonry-item:hover {
-            transform: translateY(-6px) scale(1.012);
+            transform: translateY(-12px) scale(1.018);
             box-shadow:
-              0 16px 48px rgba(0,0,0,0.55),
-              0 4px 16px rgba(0,0,0,0.30),
-              0 0 0 1px rgba(255,215,0,0.22);
+              0 32px 72px rgba(0,0,0,0.65),
+              0 8px 24px rgba(0,0,0,0.40),
+              0 0 40px rgba(255,215,0,0.12),
+              0 0 20px rgba(255,215,0,0.08);
+            border-color: rgba(255,215,0,0.28);
           }
 
-          /* Shine sweep pseudo-element */
+          /* Floating glow animation on hover */
+          @keyframes vmwFloatingGlow {
+            0%, 100% { box-shadow: 
+              0 32px 72px rgba(0,0,0,0.65),
+              0 8px 24px rgba(0,0,0,0.40),
+              0 0 40px rgba(255,215,0,0.12),
+              0 0 20px rgba(255,215,0,0.08);
+            }
+            50% { box-shadow: 
+              0 32px 72px rgba(0,0,0,0.65),
+              0 8px 24px rgba(0,0,0,0.40),
+              0 0 48px rgba(255,215,0,0.18),
+              0 0 28px rgba(255,215,0,0.12);
+            }
+          }
+          .vmw-masonry-item:hover {
+            animation: vmwFloatingGlow 3s ease-in-out infinite;
+          }
+
+          /* Cinematic shine sweep pseudo-element */
           .vmw-masonry-item::after {
             content: '';
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
             background: linear-gradient(
               125deg,
-              transparent 30%,
-              rgba(255,215,0,0.08) 50%,
-              transparent 70%
+              transparent 0%,
+              rgba(255,215,0,0.04) 15%,
+              rgba(255,215,0,0.12) 50%,
+              rgba(255,215,0,0.04) 85%,
+              transparent 100%
             );
-            transform: translateX(-100%) skewX(-15deg);
+            transform: translateX(-100%) skewX(-12deg);
             transition: none;
             pointer-events: none;
             z-index: 5;
             border-radius: inherit;
           }
           .vmw-masonry-item:hover::after {
-            transform: translateX(200%) skewX(-15deg);
-            transition: transform .65s cubic-bezier(.16,1,.3,1);
+            transform: translateX(200%) skewX(-12deg);
+            transition: transform .72s cubic-bezier(.16,1,.3,1);
           }
 
-          /* ─── Image wrapper — gives intrinsic height BEFORE image loads ── */
-          /*
-            KEY FIX: Aspect-ratio must be on a WRAPPER div, not the img itself.
-            When object-fit:cover is used, the img must fill a sized container.
-            Setting aspect-ratio on img with height:auto = zero height until load = black block.
-          */
+          /* ─── Image wrapper — intrinsic heights ── */
           .vmw-masonry-item .vmw-img-wrap {
             position: relative;
             width: 100%;
             overflow: hidden;
+            will-change: transform;
           }
-          /* Varied heights via nth-child on the WRAPPER */
+
+          /* PREMIUM VARIED HEIGHTS — Pinterest-style composition */
           .vmw-masonry-item:nth-child(5n+1) .vmw-img-wrap { aspect-ratio: 3/4; }
           .vmw-masonry-item:nth-child(5n+2) .vmw-img-wrap { aspect-ratio: 2/3; }
           .vmw-masonry-item:nth-child(5n+3) .vmw-img-wrap { aspect-ratio: 4/5; }
           .vmw-masonry-item:nth-child(5n+4) .vmw-img-wrap { aspect-ratio: 3/5; }
           .vmw-masonry-item:nth-child(5n)   .vmw-img-wrap { aspect-ratio: 5/7; }
 
-          /* ─── Image itself — fills wrapper absolutely ── */
+          /* ─── Image — Blur-to-Sharp Cinematic Transition ── */
           .vmw-masonry-item .vmw-img-wrap img {
             position: absolute;
             inset: 0;
@@ -2523,31 +3122,40 @@ const Gallery = () => {
             object-fit: cover;
             object-position: center top;
             display: block;
-            transition:
-              transform .75s cubic-bezier(.16,1,.3,1),
-              opacity .35s ease,
-              filter .5s ease;
+            will-change: transform, opacity, filter;
             opacity: 0;
+            transform: scale(1.08) translateZ(0);
+            filter: blur(24px) brightness(0.95);
+            transition:
+              transform .78s cubic-bezier(.16,1,.3,1),
+              opacity .42s ease,
+              filter .85s cubic-bezier(.22,.8,.65,1);
             transform-origin: center center;
           }
+
+          /* BLUR-TO-SHARP when loaded */
           .vmw-masonry-item .vmw-img-wrap img.vmw-img-loaded {
             opacity: 1;
-          }
-          /* Hover zoom — smooth and generous */
-          .vmw-masonry-item:hover .vmw-img-wrap img {
-            transform: scale(1.10);
-            filter: brightness(1.06) saturate(1.08);
+            transform: scale(1) translateZ(0);
+            filter: blur(0px) brightness(1);
           }
 
-          /* Fallback shown while image loads — warm dark tone, no black */
+          /* Premium hover zoom with sharp focus */
+          .vmw-masonry-item:hover .vmw-img-wrap img {
+            transform: scale(1.12) translateZ(0);
+            filter: brightness(1.08) saturate(1.12) contrast(1.05);
+          }
+
+          /* Elegant loading placeholder */
           .vmw-masonry-item .vmw-img-wrap::before {
             content: '';
             position: absolute;
             inset: 0;
-            background: linear-gradient(135deg, #1c1408 0%, #0e0b06 100%);
+            background: linear-gradient(135deg, #1c1408 0%, #2a1f0c 50%, #0e0b06 100%);
             z-index: 0;
           }
-          /* Subtle gold shimmer skeleton on the placeholder */
+
+          /* Premium gold shimmer on loading */
           .vmw-masonry-item .vmw-img-wrap::after {
             content: '';
             position: absolute;
@@ -2555,56 +3163,51 @@ const Gallery = () => {
             background: linear-gradient(
               90deg,
               transparent 0%,
-              rgba(255,215,0,0.04) 50%,
+              rgba(255,215,0,0.08) 50%,
               transparent 100%
             );
             background-size: 200% 100%;
-            animation: vmwShimmer 1.8s ease-in-out infinite;
+            animation: vmwPremiumShimmer 2.4s cubic-bezier(.25,.46,.45,.94) infinite;
             z-index: 1;
           }
-          @keyframes vmwLikePop {
-            0%   { transform: scale(1); }
-            40%  { transform: scale(1.45); }
-            70%  { transform: scale(0.9); }
-            100% { transform: scale(1); }
-          }
-          @keyframes vmwShimmer {
+
+          @keyframes vmwPremiumShimmer {
             0%   { background-position: -200% 0; }
             100% { background-position:  200% 0; }
           }
-          /* Hide shimmer once image loaded */
+
           .vmw-masonry-item .vmw-img-wrap.vmw-wrap-loaded::after {
             display: none;
           }
 
-          /* ─── Dark overlay on hover ── */
+          /* ─── Premium Cinematic Overlay ── */
           .vmw-masonry-item .vmw-overlay {
             position: absolute;
             inset: 0;
             background: linear-gradient(
               to top,
-              rgba(0,0,0,0.92) 0%,
-              rgba(0,0,0,0.28) 42%,
-              rgba(0,0,0,0.05) 70%,
+              rgba(0,0,0,0.94) 0%,
+              rgba(0,0,0,0.52) 40%,
+              rgba(0,0,0,0.08) 70%,
               transparent 100%
             );
             opacity: 0;
-            transition: opacity .38s cubic-bezier(.16,1,.3,1);
+            transition: opacity .42s cubic-bezier(.16,1,.3,1);
             z-index: 3;
             pointer-events: none;
           }
           .vmw-masonry-item:hover .vmw-overlay { opacity: 1; }
 
-          /* ─── Caption ── */
+          /* ─── Caption — Smooth Reveal ── */
           .vmw-masonry-item .vmw-caption {
             position: absolute;
             bottom: 0; left: 0; right: 0;
-            padding: 18px 14px 14px;
-            transform: translateY(10px);
+            padding: 24px 18px 18px;
+            transform: translateY(14px);
             opacity: 0;
             transition:
-              opacity .32s cubic-bezier(.16,1,.3,1),
-              transform .38s cubic-bezier(.16,1,.3,1);
+              opacity .38s cubic-bezier(.16,1,.3,1),
+              transform .42s cubic-bezier(.16,1,.3,1);
             z-index: 4;
           }
           .vmw-masonry-item:hover .vmw-caption {
@@ -2612,92 +3215,145 @@ const Gallery = () => {
             transform: translateY(0);
           }
 
-          /* ─── Category badge ── */
+          /* ─── Category Badge — Premium ── */
           .vmw-masonry-item .vmw-cat-badge {
             position: absolute;
-            top: 9px; left: 9px;
-            background: rgba(0,0,0,0.52);
-            backdrop-filter: blur(6px);
-            -webkit-backdrop-filter: blur(6px);
-            padding: 3px 8px;
-            border-radius: 2px;
-            border: 1px solid rgba(255,255,255,0.10);
+            top: 12px; left: 12px;
+            background: rgba(0,0,0,0.58);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid rgba(255,215,0,0.18);
             opacity: 0;
-            transform: translateY(-4px);
-            transition: opacity .28s ease, transform .28s ease;
+            transform: translateY(-6px) scale(0.95);
+            transition: opacity .32s ease, transform .36s cubic-bezier(.16,1,.3,1);
             z-index: 4;
           }
-          .vmw-masonry-item:hover .vmw-cat-badge { opacity:1; transform:translateY(0); }
+          .vmw-masonry-item:hover .vmw-cat-badge { 
+            opacity: 1; 
+            transform: translateY(0) scale(1);
+          }
 
-          /* ─── Selected state ── */
+          /* ─── Selected State ── */
           .vmw-masonry-item.vmw-selected {
-            outline: 1px solid rgba(255,215,0,0.45);
-            outline-offset: -1px;
+            outline: 2px solid rgba(255,215,0,0.52);
+            outline-offset: -2px;
           }
           .vmw-masonry-item.vmw-selected .vmw-img-wrap img {
-            filter: brightness(1.08) saturate(1.12);
+            filter: brightness(1.12) saturate(1.18) contrast(1.08);
           }
 
-          /* ─── Like button ── */
+          /* ─── Like Button ── */
           .vmw-like-btn { opacity: 0 !important; }
           .vmw-masonry-item:hover .vmw-like-btn,
           .vmw-like-btn-liked { opacity: 1 !important; }
-          .vmw-like-pop { animation: vmwLikePop .4s cubic-bezier(.34,1.56,.64,1); }
+
+          @keyframes vmwLikePop {
+            0%   { transform: scale(1); }
+            35%  { transform: scale(1.5); }
+            70%  { transform: scale(0.88); }
+            100% { transform: scale(1); }
+          }
+          .vmw-like-pop { animation: vmwLikePop .48s cubic-bezier(.34,1.56,.64,1); }
+
+          /* ═══════════════════════════════════════════════════════════
+             RESPONSIVE — PREMIUM MOBILE OPTIMIZATION
+             ═══════════════════════════════════════════════════════════ */
 
           /* ─── TABLET 769–1100 ── */
           @media (max-width: 1100px) {
-            .vmw-masonry { columns: 3; column-gap: 8px; }
-            .vmw-masonry-item { margin-bottom: 8px; }
+            .vmw-masonry { columns: 3; column-gap: 12px; }
+            .vmw-masonry-item { margin-bottom: 12px; border-radius: 10px; }
           }
 
-          /* ─── MOBILE ≤768px ── */
+          /* ─── MOBILE ≤768px — Stacked Beauty ── */
           @media (max-width: 768px) {
-            .vmw-masonry { columns: 2; column-gap: 8px; }
-            .vmw-masonry-item { margin-bottom: 8px; border-radius: 4px; }
-            /* On touch, always show caption and overlay so it's not hover-only */
-            .vmw-masonry-item .vmw-overlay { opacity: 0.55; }
-            .vmw-masonry-item .vmw-caption { opacity: 1; transform: translateY(0); }
-            .vmw-masonry-item .vmw-cat-badge { opacity: 1; transform: translateY(0); }
-            /* No hover zoom/lift on touch — prevents layout jank */
-            .vmw-masonry-item:hover .vmw-img-wrap img { transform: none; filter: none; }
-            .vmw-masonry-item:hover { transform: none; box-shadow: none; }
-            .vmw-masonry-item:hover::after { transform: none; transition: none; }
-            /* Slightly tighter caption on small screens */
-            .vmw-masonry-item .vmw-caption { padding: 10px 9px 9px; }
+            .vmw-masonry { columns: 2; column-gap: 10px; }
+            .vmw-masonry-item { 
+              margin-bottom: 10px; 
+              border-radius: 8px;
+              /* Always show on mobile for UX */
+              transform: none !important;
+            }
+            
+            /* Touch-friendly: persistent overlay & caption */
+            .vmw-masonry-item .vmw-overlay { opacity: 0.48 !important; }
+            .vmw-masonry-item .vmw-caption { 
+              opacity: 1 !important; 
+              transform: translateY(0) !important; 
+            }
+            .vmw-masonry-item .vmw-cat-badge { 
+              opacity: 1 !important; 
+              transform: translateY(0) scale(1) !important; 
+            }
+            
+            /* Disable hover zoom on touch */
+            .vmw-masonry-item:hover .vmw-img-wrap img { 
+              transform: scale(1) !important; 
+            }
+            .vmw-masonry-item:hover { 
+              transform: none !important; 
+              box-shadow: none !important;
+            }
+            .vmw-masonry-item:hover::after { 
+              transform: none !important; 
+            }
+            
+            /* Tighter spacing on mobile */
+            .vmw-masonry-item .vmw-caption { 
+              padding: 12px 10px 10px !important; 
+            }
           }
 
           /* ─── SMALL MOBILE ≤420px ── */
           @media (max-width: 420px) {
-            .vmw-masonry { column-gap: 6px; }
-            .vmw-masonry-item { margin-bottom: 6px; }
+            .vmw-masonry { column-gap: 8px; }
+            .vmw-masonry-item { margin-bottom: 8px; border-radius: 6px; }
+            .vmw-masonry-item .vmw-cat-badge { top: 8px; left: 8px; padding: 4px 8px; }
           }
         `}</style>
 
-        <div className="vmw-masonry" style={{marginBottom:48}}>
+        {/* Parallax Scroll Container */}
+        <motion.div 
+          style={{position:'relative',zIndex:2}}
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: false, margin: '-100px' }}
+          transition={{ duration: 0.6 }}
+        >
+          <div className="vmw-masonry" style={{marginBottom:48}}>
           {filteredIdols.map((idol, idx) => {
             const isSelected = selected === idol.id;
-            const isLiked = liked[idol.id];
+            const isLiked = liked[idol.gid];
             const isLoaded = loadedImages[idol.id];
+            const staggerDelay = (idx % 8) * 0.06;
+            const columnDelay = Math.floor(idx / 8) * 0.08;
+            const totalDelay = staggerDelay + columnDelay;
 
-            const isLeft = idx % 2 === 0;
             return (
               <motion.div
                 key={idol.id}
                 className={`vmw-masonry-item${isSelected ? ' vmw-selected' : ''}`}
-                onClick={() => setSelected(isSelected ? null : idol.id)}
+                onClick={() => onSelect ? onSelect(idol.id) : setSelected(isSelected ? null : idol.id)}
                 style={{ border: `1px solid ${isSelected ? 'rgba(255,215,0,0.35)' : 'rgba(255,255,255,0.07)'}` }}
-                initial={{ opacity:0, x: isLeft ? -48 : 48 }}
-                whileInView={{ opacity:1, x:0 }}
-                viewport={{ once:false, margin:'-40px' }}
-                transition={{ duration:0.75, delay:(idx % 4)*0.07, ease:[0.16,1,0.3,1] }}
+                initial={{ opacity:0, y: 48, scale: 0.92 }}
+                whileInView={{ opacity:1, y: 0, scale: 1 }}
+                viewport={{ once:false, margin:'-60px' }}
+                transition={{ 
+                  duration:0.85, 
+                  delay: totalDelay,
+                  ease:[0.16,1,0.3,1]
+                }}
               >
                 {/* Image wrapper — has intrinsic aspect-ratio so height exists before image loads */}
                 <div className={`vmw-img-wrap${isLoaded ? ' vmw-wrap-loaded' : ''}`}>
                   <img
                     src={idol.img}
                     alt={idol.deity}
-                    loading={idx < 4 ? 'eager' : 'lazy'}
+                    loading={idx < 8 ? 'eager' : 'lazy'}
                     className={isLoaded ? 'vmw-img-loaded' : ''}
+                    decoding="async"
                     onLoad={() => setLoadedImages(prev => ({...prev, [idol.id]: true}))}
                     onError={e => {
                       // Fallback: show a gold-tinted placeholder gradient instead of broken img
@@ -2707,7 +3363,7 @@ const Gallery = () => {
                         wrap.style.background = 'linear-gradient(135deg,#1c1408 0%,#2a1e0a 50%,#1c1408 100%)';
                         // Add a subtle V monogram fallback
                         const fb = document.createElement('div');
-                        fb.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-size:32px;color:rgba(255,215,0,0.25);user-select:none;z-index:2';
+                        fb.style.cssText = 'position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:Georgia,serif;font-size:42px;color:rgba(255,215,0,0.15);user-select:none;z-index:2;font-weight:700';
                         fb.textContent = 'V';
                         wrap.appendChild(fb);
                       }
@@ -2729,7 +3385,7 @@ const Gallery = () => {
 
                 {/* Like button */}
                 <button
-                  onClick={e => handleLike(idol.id, e)}
+                  onClick={e => handleLike(idol, e)}
                   className={`vmw-like-btn${isLiked ? ' vmw-like-btn-liked' : ''}${likeAnim[idol.id] ? ' vmw-like-pop' : ''}`}
                   style={{
                     position:'absolute', top:9, right:9, zIndex:5,
@@ -2769,7 +3425,8 @@ const Gallery = () => {
               </motion.div>
             );
           })}
-        </div>
+          </div>
+        </motion.div>
         {/* Dock */}
         <Reveal delay={.1}>
           <div style={{display:'flex',justifyContent:'center',marginBottom:32}}>
@@ -2777,10 +3434,10 @@ const Gallery = () => {
               onMouseMove={e=>{const rect=dockRef.current.getBoundingClientRect();setMouseX(e.clientX-rect.left);}}
               onMouseLeave={()=>setMouseX(null)}
               style={{display:'flex',alignItems:'flex-end',gap:8,padding:'12px 20px',background:C.isDark?'rgba(22,20,18,0.92)':'rgba(245,240,232,0.92)',backdropFilter:'blur(20px)',borderRadius:24,border:`1px solid ${C.border}`,boxShadow:`0 8px 40px rgba(0,0,0,0.5)`}}>
-              {GALLERY_IDOLS.map((idol,idx)=>{
+              {allIdols.map((idol,idx)=>{
                 const scale=getDockScale(idx);
                 const isSelected=selected===idol.id;
-                const isLiked=liked[idol.id];
+                const isLiked=liked[idol.gid];
                 return (
                   <div key={idol.id} style={{display:'flex',flexDirection:'column',alignItems:'center',gap:5}}>
                     <motion.div animate={{opacity:hovered===idol.id?1:0,y:hovered===idol.id?0:4}}
@@ -2804,48 +3461,310 @@ const Gallery = () => {
             </div>
           </div>
         </Reveal>
-        {/* Fullscreen Lightbox for Selected Detail */}
+        {/* ── PREMIUM FULLSCREEN CINEMATIC LIGHTBOX ── */}
+        <style>{`
+          /* Mobile lightbox optimization */
+          @media (max-width: 768px) {
+            /* Fullscreen on mobile */
+            [role="dialog"] {
+              padding: 0 !important;
+            }
+            
+            /* Larger navigation buttons for touch */
+            [style*="width: 56px"] {
+              width: 48px !important;
+              height: 48px !important;
+              font-size: 28px !important;
+            }
+            
+            /* Close button easier to tap */
+            [style*="width: 44px"] {
+              width: 48px !important;
+              height: 48px !important;
+            }
+            
+            /* Image counter repositioned for mobile */
+            @supports (position: fixed) {
+              .lightbox-counter {
+                bottom: 12px !important;
+                left: 12px !important;
+                padding: 8px 12px !important;
+                font-size: 11px !important;
+              }
+            }
+          }
+          
+          /* iPhone X+ notch safety */
+          @supports (padding: max(0px)) {
+            @media (max-width: 768px) {
+              [style*="position: fixed"] {
+                padding-left: max(12px, env(safe-area-inset-left));
+                padding-right: max(12px, env(safe-area-inset-right));
+              }
+            }
+          }
+        `}</style>
         <AnimatePresence>
           {sel && (
-            <motion.div 
-              initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-              style={{position:'fixed',inset:0,zIndex:999,background:'rgba(0,0,0,0.95)',backdropFilter:'blur(15px)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}
-              onClick={() => setSelected(null)}
-            >
-              <button onClick={(e) => { e.stopPropagation(); setSelected(null); }} style={{position:'absolute',top:30,right:30,background:'none',border:'none',color:'#fff',fontSize:44,cursor:'pointer',zIndex:1000}}>×</button>
-              
-              <button onClick={handlePrev} style={{position:'absolute',left:20,top:'50%',transform:'translateY(-50%)',background:'rgba(255,255,255,0.1)',border:'none',color:'#fff',fontSize:40,cursor:'pointer',borderRadius:'50%',width:60,height:60,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(5px)',zIndex:1000}}>‹</button>
-              <button onClick={handleNext} style={{position:'absolute',right:20,top:'50%',transform:'translateY(-50%)',background:'rgba(255,255,255,0.1)',border:'none',color:'#fff',fontSize:40,cursor:'pointer',borderRadius:'50%',width:60,height:60,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(5px)',zIndex:1000}}>›</button>
-
-              <motion.img 
-                key={sel.id}
-                initial={{scale:0.9, opacity:0}} animate={{scale:1, opacity:1}} transition={{duration: 0.4, ease: "easeOut"}}
-                src={sel.img} alt={sel.deity} 
-                style={{maxHeight:'70vh',maxWidth:'90vw',objectFit:'contain',borderRadius:8,boxShadow:'0 20px 60px rgba(0,0,0,0.8)'}}
-                onClick={(e) => e.stopPropagation()}
-              />
-              
-              <motion.div initial={{opacity:0, y:20}} animate={{opacity:1, y:0}} transition={{delay:0.2}}
-                style={{marginTop:24,padding:'24px 32px',border:`1px solid ${C.borderHi}`,background:'rgba(255,255,255,0.03)',backdropFilter:'blur(10px)',borderRadius:12,maxWidth:'90vw',width:600}}
-                onClick={(e) => e.stopPropagation()}
+            <>
+              {/* Premium Backdrop with Depth Animation */}
+              <motion.div
+                initial={{opacity:0,backdropFilter:'blur(0px)'}} 
+                animate={{opacity:1,backdropFilter:'blur(18px)'}} 
+                exit={{opacity:0,backdropFilter:'blur(0px)'}}
+                transition={{duration:0.5,ease:[0.16,1,0.3,1]}}
+                style={{
+                  position:'fixed',inset:0,zIndex:999,
+                  background:'linear-gradient(135deg,rgba(0,0,0,0.92) 0%,rgba(8,6,4,0.95) 50%,rgba(0,0,0,0.92) 100%)',
+                  backdropFilter:'blur(18px)',
+                  display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+                  overflowY:'auto',padding:'20px 0'
+                }}
+                onClick={() => { setSelected(null); setShowComments(false); setCommentInput(''); }}
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
               >
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:16}}>
-                  <div>
-                    <div style={{...ff.body,fontSize:9,letterSpacing:'.44em',color:'rgba(255,215,0,0.8)',fontWeight:600,textTransform:'uppercase',marginBottom:8}}>{sel.cat}</div>
-                    <div style={{...ff.display,fontSize:32,color:C.text,fontWeight:700,marginBottom:4}}>{sel.deity}</div>
-                    <div style={{...ff.serif,fontSize:16,color:C.dim,fontStyle:'italic'}}>{sel.metal} · Handcrafted in Sowcarpet</div>
+                {/* Close Button - Floating Animation */}
+                <motion.button 
+                  onClick={e=>{e.stopPropagation();setSelected(null);setShowComments(false);setCommentInput('');}}
+                  animate={{y:[0,-3,0]}}
+                  transition={{duration:2.5,repeat:Infinity,ease:'easeInOut'}}
+                  whileHover={{scale:1.12,background:'rgba(255,255,255,0.22)'}}
+                  whileTap={{scale:0.92}}
+                  style={{position:'fixed',top:24,right:28,background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.15)',color:'#fff',fontSize:22,cursor:'pointer',zIndex:1001,width:44,height:44,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(8px)',transition:'background .2s',boxShadow:'0 8px 24px rgba(0,0,0,0.4)'}}
+                >×</motion.button>
+
+                {/* Prev Button - Floating with Direction */}
+                <motion.button 
+                  onClick={handlePrev}
+                  animate={{x:[-2,0,-2],y:[0,-2,0]}}
+                  transition={{duration:3,repeat:Infinity,ease:'easeInOut'}}
+                  whileHover={{scale:1.14,x:0,background:'rgba(255,215,0,0.18)'}}
+                  whileTap={{scale:0.88}}
+                  style={{position:'fixed',left:16,top:'50%',transform:'translateY(-50%)',background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)',color:'#fff',fontSize:36,cursor:'pointer',borderRadius:'50%',width:56,height:56,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(8px)',zIndex:1001,transition:'background .2s, box-shadow .2s',boxShadow:'0 12px 32px rgba(0,0,0,0.5)'}}
+                >‹</motion.button>
+
+                {/* Next Button - Floating with Direction */}
+                <motion.button 
+                  onClick={handleNext}
+                  animate={{x:[2,0,2],y:[0,-2,0]}}
+                  transition={{duration:3,repeat:Infinity,ease:'easeInOut'}}
+                  whileHover={{scale:1.14,x:0,background:'rgba(255,215,0,0.18)'}}
+                  whileTap={{scale:0.88}}
+                  style={{position:'fixed',right:16,top:'50%',transform:'translateY(-50%)',background:'rgba(255,255,255,0.08)',border:'1px solid rgba(255,255,255,0.12)',color:'#fff',fontSize:36,cursor:'pointer',borderRadius:'50%',width:56,height:56,display:'flex',alignItems:'center',justifyContent:'center',backdropFilter:'blur(8px)',zIndex:1001,transition:'background .2s, box-shadow .2s',boxShadow:'0 12px 32px rgba(0,0,0,0.5)'}}
+                >›</motion.button>
+
+              {/* Image with Motion Blur Transition */}
+              <motion.div
+                key={sel.id}
+                style={{position:'relative', display:'flex', justifyContent:'center', alignItems:'center', maxWidth:'90vw', maxHeight:'80vh'}}
+                initial={{opacity:0,scale:0.92,filter:'blur(12px)'}}
+                animate={{opacity:1,scale:1,filter:'blur(0px)'}}
+                exit={{opacity:0,scale:0.95,filter:'blur(8px)'}}
+                transition={{duration:0.6,ease:[0.16,1,0.3,1]}}
+              >
+                <motion.img
+                  src={sel.img}
+                  alt={sel.deity}
+                  style={{maxHeight:'80vh',maxWidth:'100%',objectFit:'contain',borderRadius:12,boxShadow:'0 32px 96px rgba(0,0,0,0.8), 0 0 40px rgba(255,215,0,0.08)',display:'block',width:'auto',height:'auto'}}
+                  onClick={e=>e.stopPropagation()}
+                  animate={{scale:1}}
+                  whileHover={{scale:1.02}}
+                  transition={{duration:0.3,ease:[0.16,1,0.3,1]}}
+                />
+                
+                {/* Image Counter Badge - Floating */}
+                <motion.div
+                  animate={{y:[0,-4,0]}}
+                  transition={{duration:2,repeat:Infinity,ease:'easeInOut'}}
+                  style={{
+                    position:'absolute',bottom:16,left:16,
+                    background:'rgba(0,0,0,0.68)',backdropFilter:'blur(12px)',
+                    border:'1px solid rgba(255,215,0,0.35)',
+                    borderRadius:10,padding:'10px 16px',
+                    fontFamily:"'Jost',sans-serif",fontSize:13,fontWeight:700,
+                    color:'rgba(255,215,0,0.9)',
+                    boxShadow:'0 8px 24px rgba(0,0,0,0.6)',
+                    letterSpacing:'.12em'
+                  }}
+                >
+                  {currentImageIndex + 1} / {totalImages}
+                </motion.div>
+
+                {/* Progress Bar - Circular Indicator */}
+                <svg
+                  style={{position:'absolute',bottom:20,right:20,width:48,height:48}}
+                  viewBox="0 0 48 48"
+                >
+                  <circle cx="24" cy="24" r="20" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="2"/>
+                  <motion.circle
+                    cx="24"
+                    cy="24"
+                    r="20"
+                    fill="none"
+                    stroke="rgba(255,215,0,0.8)"
+                    strokeWidth="2"
+                    strokeDasharray={`${(currentImageIndex + 1) / totalImages * 125.6} 125.6`}
+                    strokeLinecap="round"
+                    style={{transformOrigin:'24px 24px',transform:'rotate(-90deg)'}}
+                  />
+                </svg>
+              </motion.div>
+
+              {/* Info Panel - Floating with Staggered Children */}
+              <motion.div 
+                initial={{opacity:0,y:32}} 
+                animate={{opacity:1,y:0}} 
+                exit={{opacity:0,y:20}}
+                transition={{delay:0.2,duration:0.6,ease:[0.16,1,0.3,1]}}
+                style={{marginTop:28,width:'min(680px,92vw)',flexShrink:0}}
+                onClick={e=>e.stopPropagation()}
+              >
+                {/* Top row — title + action buttons */}
+                <motion.div 
+                  initial={{opacity:0}} 
+                  animate={{opacity:1}} 
+                  transition={{delay:0.3,duration:0.5}}
+                  style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:16,padding:'24px 28px',border:`1px solid ${C.borderHi}`,borderBottom:'none',background:'linear-gradient(135deg,rgba(255,255,255,0.06) 0%,rgba(255,215,0,0.02) 100%)',backdropFilter:'blur(16px)',borderRadius:'14px 14px 0 0',flexWrap:'wrap',boxShadow:'0 16px 48px rgba(0,0,0,0.4)'}}
+                >
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{...ff.body,fontSize:8,letterSpacing:'.44em',color:'rgba(255,215,0,0.85)',fontWeight:600,textTransform:'uppercase',marginBottom:6}}>{sel.cat}</div>
+                    <div style={{...ff.display,fontSize:26,color:'rgba(255,255,255,0.94)',fontWeight:700,marginBottom:3,lineHeight:1.1}}>{sel.deity}</div>
+                    <div style={{...ff.serif,fontSize:13,color:'rgba(255,255,255,0.5)',fontStyle:'italic'}}>{sel.metal} · Handcrafted in Sowcarpet</div>
                   </div>
-                  <CurvyButton primary onClick={(e)=>{e.stopPropagation(); window.open(`https://wa.me/919382877351?text=${encodeURIComponent(`Namaskaram, I am interested in commissioning a ${sel.deity} idol in ${sel.metal}. Please share details.`)}`);}}>
+                  <div style={{display:'flex',gap:8,alignItems:'center',flexShrink:0}}>
+                    {/* Like Button - with Animation */}
+                    <motion.button
+                      onClick={e=>handleLike(sel,e)}
+                      title="Like this piece"
+                      animate={{y:[0,-2,0]}}
+                      transition={{duration:2.5,repeat:Infinity,ease:'easeInOut'}}
+                      whileHover={{scale:1.1,background: liked[sel.gid] ? 'rgba(255,50,80,0.28)' : 'rgba(255,255,255,0.15)'}}
+                      whileTap={{scale:0.92}}
+                      style={{
+                        background: liked[sel.gid] ? 'rgba(255,50,80,0.18)' : 'rgba(255,255,255,0.07)',
+                        border: `1px solid ${liked[sel.gid] ? 'rgba(255,80,100,0.5)' : 'rgba(255,255,255,0.15)'}`,
+                        borderRadius:10, padding:'11px 16px', cursor:'pointer',
+                        display:'flex', alignItems:'center', gap:6,
+                        color: liked[sel.gid] ? '#ff6080' : 'rgba(255,255,255,0.7)',
+                        fontSize:13, fontFamily:"'Jost',sans-serif", fontWeight:600,
+                        transition:'all .2s',boxShadow:'0 4px 12px rgba(0,0,0,0.3)',
+                      }}
+                    >{liked[sel.gid] ? '❤️' : '🤍'} <span style={{fontSize:10,letterSpacing:'.08em'}}>{liked[sel.gid]?'Liked':'Like'}</span></motion.button>
+
+                    {/* Save Button - with Animation */}
+                    <motion.button
+                      onClick={e=>handleSave(sel,e)}
+                      title={isLoggedIn ? 'Save to collection' : 'Sign in to save'}
+                      animate={{y:[0,-2,0]}}
+                      transition={{duration:2.5,repeat:Infinity,ease:'easeInOut',delay:0.1}}
+                      whileHover={{scale:1.1,background: saved[sel.gid] ? 'rgba(255,215,0,0.24)' : 'rgba(255,255,255,0.15)'}}
+                      whileTap={{scale:0.92}}
+                      style={{
+                        background: saved[sel.gid] ? 'rgba(255,215,0,0.14)' : 'rgba(255,255,255,0.07)',
+                        border: `1px solid ${saved[sel.gid] ? 'rgba(255,215,0,0.45)' : 'rgba(255,255,255,0.15)'}`,
+                        borderRadius:10, padding:'11px 16px', cursor:'pointer',
+                        display:'flex', alignItems:'center', gap:6,
+                        color: saved[sel.gid] ? '#FFD700' : 'rgba(255,255,255,0.7)',
+                        fontSize:13, fontFamily:"'Jost',sans-serif", fontWeight:600,
+                        transition:'all .2s',boxShadow:'0 4px 12px rgba(0,0,0,0.3)',
+                      }}
+                    >{saved[sel.gid] ? '🔖' : '📌'} <span style={{fontSize:10,letterSpacing:'.08em'}}>{saved[sel.gid]?'Saved':'Save'}</span></motion.button>
+
+                    {/* Comment Button - with Animation */}
+                    <motion.button
+                      onClick={e=>{e.stopPropagation();setShowComments(v=>!v);}}
+                      title="View & add comments"
+                      animate={{y:[0,-2,0]}}
+                      transition={{duration:2.5,repeat:Infinity,ease:'easeInOut',delay:0.2}}
+                      whileHover={{scale:1.1,background: showComments ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.15)'}}
+                      whileTap={{scale:0.92}}
+                      style={{
+                        background: showComments ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.07)',
+                        border: `1px solid ${showComments ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)'}`,
+                        borderRadius:10, padding:'11px 16px', cursor:'pointer',
+                        display:'flex', alignItems:'center', gap:6,
+                        color:'rgba(255,255,255,0.7)', fontSize:13,
+                        fontFamily:"'Jost',sans-serif", fontWeight:600, transition:'all .2s',
+                        boxShadow:'0 4px 12px rgba(0,0,0,0.3)',
+                      }}
+                    >💬 <span style={{fontSize:10,letterSpacing:'.08em'}}>{(comments[sel.id]||[]).length || ''} {showComments ? 'Hide' : 'Comments'}</span></motion.button>
+                  </div>
+                </motion.div>
+
+                {/* Commission CTA row - Floating */}
+                <motion.div 
+                  initial={{opacity:0}} 
+                  animate={{opacity:1}} 
+                  transition={{delay:0.35,duration:0.5}}
+                  style={{padding:'18px 28px',border:`1px solid ${C.borderHi}`,borderTop:`1px solid rgba(255,255,255,0.06)`,background:'linear-gradient(135deg,rgba(255,215,0,0.05) 0%,rgba(0,0,0,0.4) 100%)',backdropFilter:'blur(16px)',display:'flex',justifyContent:'flex-end'}}
+                >
+                  <CurvyButton primary onClick={e=>{e.stopPropagation();window.open(`https://wa.me/919382877351?text=${encodeURIComponent(`Namaskaram, I am interested in commissioning a ${sel.deity} (${sel.metal}). Please share details.`)}`);}} >
                     Commission This →
                   </CurvyButton>
-                </div>
+                </motion.div>
+
+                {/* Comments panel - Floating with Smooth Expand */}
+                <AnimatePresence>
+                  {showComments && (
+                    <motion.div
+                      initial={{height:0,opacity:0}} animate={{height:'auto',opacity:1}} exit={{height:0,opacity:0}}
+                      transition={{duration:0.4,ease:[.16,1,.3,1]}}
+                      style={{overflow:'hidden',border:`1px solid ${C.borderHi}`,borderTop:'none',background:'linear-gradient(135deg,rgba(0,0,0,0.6) 0%,rgba(255,215,0,0.02) 100%)',backdropFilter:'blur(16px)',borderRadius:'0 0 14px 14px',boxShadow:'0 16px 48px rgba(0,0,0,0.4)'}}
+                      onClick={e=>e.stopPropagation()}
+                    >
+                      <div style={{padding:'16px 24px 8px',maxHeight:220,overflowY:'auto'}}>
+                        {(comments[sel.id]||[]).length === 0 ? (
+                          <p style={{...ff.serif,fontSize:13,color:'rgba(255,255,255,0.35)',fontStyle:'italic',textAlign:'center',padding:'8px 0'}}>No comments yet — be the first.</p>
+                        ) : (comments[sel.id]||[]).map((c,i) => (
+                          <div key={i} style={{display:'flex',gap:10,marginBottom:12,alignItems:'flex-start'}}>
+                            <div style={{width:28,height:28,borderRadius:'50%',background:'rgba(255,215,0,0.15)',border:'1px solid rgba(255,215,0,0.3)',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,fontSize:11}}>✦</div>
+                            <div>
+                              <div style={{...ff.body,fontSize:10,color:'rgba(255,255,255,0.8)',lineHeight:1.5}}>{c.text}</div>
+                              <div style={{...ff.body,fontSize:8,color:'rgba(255,255,255,0.3)',marginTop:2,letterSpacing:'.1em'}}>{c.time}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Add comment input */}
+                      <div style={{padding:'14px 20px 18px',borderTop:'1px solid rgba(255,255,255,0.07)',display:'flex',gap:8,alignItems:'center'}}>
+                        <input
+                          value={commentInput}
+                          onChange={e=>setCommentInput(e.target.value)}
+                          onKeyDown={e=>e.key==='Enter'&&handleAddComment(sel,e)}
+                          onClick={e=>e.stopPropagation()}
+                          placeholder={isLoggedIn ? 'Add a comment…' : 'Sign in to comment…'}
+                          readOnly={!isLoggedIn}
+                          style={{
+                            flex:1, background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.16)',
+                            borderRadius:10, padding:'11px 16px', color:'rgba(255,255,255,0.85)',
+                            fontFamily:"'Jost',sans-serif", fontSize:13, outline:'none',
+                            cursor: isLoggedIn ? 'text' : 'pointer',
+                            transition:'all .2s',boxShadow:'0 4px 12px rgba(0,0,0,0.2)',
+                          }}
+                          onFocus={e=>{if(!isLoggedIn){setGlobalAuthAction('comment');setShowAuthModal(true);}}}
+                        />
+                        <motion.button
+                          onClick={e=>handleAddComment(sel,e)}
+                          whileHover={{scale:1.08}}
+                          whileTap={{scale:0.92}}
+                          style={{background:'rgba(255,215,0,0.18)',border:'1px solid rgba(255,215,0,0.4)',borderRadius:10,padding:'11px 18px',color:'#FFD700',cursor:'pointer',fontFamily:"'Jost',sans-serif",fontSize:12,fontWeight:700,letterSpacing:'.15em',transition:'all .2s',boxShadow:'0 4px 12px rgba(0,0,0,0.3)'}}
+                        >Post</motion.button>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </motion.div>
-            </motion.div>
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
+
+        {/* Auth modal moved to AppContent */}
+
         <SectionCTA primary="Commission a Piece" secondary="Contact Us"
-          onPrimary={()=>window.open(BIZ.whatsapp)}
-          onSecondary={()=>document.getElementById('contact')?.scrollIntoView({behavior:'smooth'})}/>
+          onPrimary={()=>setShowCommissionModal(true)}
+          onSecondary={()=>window.open(BIZ.whatsapp)}/>
       </div>
     </section>
   );
@@ -2856,6 +3775,8 @@ const Gallery = () => {
 ═══════════════════════════════════════════════════════════════ */
 const Testimonials = () => {
   const C = useTheme();
+  const navigate = useNavigate();
+  const { setShowCommissionModal } = useAppCtx();
   const [active, setActive] = useState(0);
   const [paused, setPaused] = useState(false);
   const AUTO_MS = 6000;
@@ -2962,8 +3883,8 @@ const Testimonials = () => {
         </StaggerContainer>
 
         <SectionCTA primary="Commission Your Own Legacy" secondary="View Our Work"
-          onPrimary={()=>window.open(BIZ.whatsapp)}
-          onSecondary={()=>document.getElementById('gallery')?.scrollIntoView({behavior:'smooth'})}/>
+          onPrimary={()=>setShowCommissionModal(true)}
+          onSecondary={()=>navigate('/gallery')}/>
       </div>
     </section>
   );
@@ -3051,12 +3972,12 @@ const Archive = () => {
   const C = useTheme();
   const [hov, setHov] = useState(null);
   const pieces = [
-    { id:0, t:'Sadari Crown Set', s:'24K Gold · Nagas Work', img:'/vmw/product_20.jpg', tag:'Gold Work', large:true },
-    { id:1, t:'Kasumala Necklace', s:'Silver · Stone Setting', img:'/vmw/product_19.jpg', tag:'Silver Work' },
-    { id:2, t:'Temple Jewellery', s:'Gold Plated Copper', img:'/vmw/product_13.jpg', tag:'Crown Work' },
-    { id:3, t:'Kanganam Bangle', s:'Gold Copper', img:'/vmw/product_18.jpg', tag:'Copper Work' },
-    { id:4, t:'Sacred Sadari', s:'Sterling Silver', img:'/vmw/product_15.jpg', tag:'Silver Work' },
-    { id:5, t:'Workshop Craft', s:'All Metals · All Crafts', img:'/vmw/product_12.jpg', tag:'Renovation' },
+    { id:0, t:'Sadari Crown Set', s:'24K Gold · Nagas Work', img:'/gallery/gold/sadarigold.jpg', tag:'Gold Work', large:true },
+    { id:1, t:'Kandabaranam Silver', s:'Silver · Stone Setting', img:'/gallery/silver/kandabaranam.jpg', tag:'Silver Work' },
+    { id:2, t:'Temple Crown Gold', s:'Gold Handcrafted', img:'/gallery/gold/crown.jpg', tag:'Crown Work' },
+    { id:3, t:'Kanganam Bangle', s:'Gold Stone Setting', img:'/gallery/gold/kanganam4.jpg', tag:'Gold Work' },
+    { id:4, t:'Stone Piece', s:'Precious Stone Work', img:'/gallery/stone/stone1.jpg', tag:'Stone Work' },
+    { id:5, t:'Temple Vigraham', s:'All Metals · All Crafts', img:'/gallery/temple/god.jpg', tag:'Vigraham' },
   ];
   return (
     <section id="archive" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg1}}>
@@ -3135,6 +4056,7 @@ const VALIDATORS = {
 
 const Contact = () => {
   const C = useTheme();
+  const { setShowCommissionModal } = useAppCtx();
   const [type,       setType]       = useState('Idol / Vigraham');
   const [name,       setName]       = useState('');
   const [phone,      setPhone]      = useState('');
@@ -3257,18 +4179,6 @@ const Contact = () => {
     }
   };
 
-  const Corner = ({ v, h }) => (
-    <div style={{position:'absolute',[v]:-2,[h]:-2,width:24,height:24,
-      borderTop:v==='top'?`1px solid ${C.borderHi}`:'none',borderBottom:v==='bottom'?`1px solid ${C.borderHi}`:'none',
-      borderLeft:h==='left'?`1px solid ${C.borderHi}`:'none',borderRight:h==='right'?`1px solid ${C.borderHi}`:'none',opacity:.55}}/>
-  );
-
-  const FieldError = ({ field }) => errors[field] && touched[field] ? (
-    <motion.div initial={{opacity:0,y:-4}} animate={{opacity:1,y:0}} transition={{duration:.2}}
-      style={{...ff.body,fontSize:8.5,color:'rgba(255,100,80,0.9)',letterSpacing:'.12em',marginTop:5,display:'flex',alignItems:'center',gap:5}}>
-      <span style={{fontSize:10}}>⚠</span> {errors[field]}
-    </motion.div>
-  ) : null;
 
   return (
     <section id="contact" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
@@ -3329,205 +4239,41 @@ const Contact = () => {
         )}
       </AnimatePresence>
 
-      <div style={{maxWidth:1240,margin:'0 auto'}}>
-        <div className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:96}}>
-
-          {/* ── Left: contact info + map ── */}
-          <SlideLeft>
-              <span style={{...ff.body,fontSize:8,letterSpacing:'.52em',color:C.dim,fontWeight:600,textTransform:'uppercase',display:'block',marginBottom:18,opacity:.8}}>Direct Pipeline</span>
-              <h2 style={{...ff.display,fontSize:'clamp(30px,5vw,60px)',lineHeight:.88,letterSpacing:'.04em',color:C.text,fontWeight:700,marginBottom:22}}>
-                COMMISSION<br/><span style={{color:C.gold}}>A LEGACY</span>
-              </h2>
-              <p style={{...ff.serif,fontSize:16,lineHeight:2.1,color:C.dim,fontStyle:'italic',marginBottom:36}}>
-                From our workshop on Murugappa Street, Sowcarpet — to temples across the world.
-              </p>
-              <div style={{display:'flex',flexDirection:'column',gap:18,marginBottom:36}}>
-                {[
-                  { icon:'☎', txt:BIZ.phone, link:`tel:${BIZ.phoneTel}` },
-                  { icon:'✉', txt:BIZ.email, link:`mailto:${BIZ.email}` },
-                  { icon:'💬', txt:`WhatsApp: ${BIZ.phone}`, link:BIZ.whatsapp },
-                  { icon:'📍', txt:BIZ.address, link:BIZ.mapLink },
-                ].map(c=>(
-                  <motion.div key={c.txt} onClick={()=>window.open(c.link)} whileHover={{x:10}}
-                    style={{display:'flex',alignItems:'flex-start',gap:17,cursor:'pointer'}}>
-                    <span style={{fontSize:16,color:C.gold,width:22,textAlign:'center',marginTop:1,flexShrink:0}}>{c.icon}</span>
-                    <span style={{...ff.body,fontSize:11,color:C.dim,letterSpacing:'.05em',lineHeight:1.75,transition:'color .3s'}}
-                      onMouseEnter={e=>e.target.style.color=C.text} onMouseLeave={e=>e.target.style.color=C.dim}>{c.txt}</span>
-                  </motion.div>
-                ))}
-              </div>
-              <div style={{border:`1px solid ${C.border}`,overflow:'hidden',borderRadius:2,marginBottom:16}}>
-                <iframe
-                  src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3886.573!2d80.27069!3d13.08694!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3a526650d31f09f3%3A0x8b70e4b9e4e4e4e4!2sMurugappa%20St%2C%20Sowcarpet%2C%20Chennai%2C%20Tamil%20Nadu%20600079!5e0!3m2!1sen!2sin!4v1700000000000!5m2!1sen!2sin"
-                  width="100%" height="220"
-                  style={{border:0,display:'block',filter:C.isDark?'grayscale(80%) invert(90%) sepia(20%)':'grayscale(40%) sepia(10%)',opacity:.7}}
-                  allowFullScreen loading="lazy" referrerPolicy="no-referrer-when-downgrade" title="Vijay Metal Works Location"/>
-              </div>
-              <a href={BIZ.mapLink} target="_blank" rel="noopener noreferrer"
-                style={{...ff.body,fontSize:8,color:C.gold,letterSpacing:'.3em',textTransform:'uppercase',fontWeight:600,textDecoration:'none',display:'flex',alignItems:'center',gap:8}}>
-                <span>📍</span> Get Directions
-              </a>
-          </SlideLeft>
-
-          {/* ── Right: inquiry form ── */}
-          <SlideRight delay={.12}>
-            <div style={{position:'relative',border:`1px solid ${C.border}`,padding:'52px 46px',background:C.surfaceWarm,backdropFilter:'blur(14px)'}}>
-              <Corner v="top" h="left"/><Corner v="top" h="right"/><Corner v="bottom" h="left"/><Corner v="bottom" h="right"/>
-
-              {/* Work type selector */}
-              <div style={{...ff.body,fontSize:8,letterSpacing:'.48em',color:C.dim,fontWeight:600,textTransform:'uppercase',marginBottom:14,opacity:.9}}>Select Work Type</div>
-              <div style={{display:'grid',gridTemplateColumns:'repeat(2,1fr)',gap:6,marginBottom:32}}>
-                {workTypes.map(wt=>(
-                  <motion.button key={wt} onClick={()=>setType(wt)} whileTap={{scale:.97}}
-                    style={{...ff.body,padding:'10px 6px',fontSize:7.5,letterSpacing:'.2em',fontWeight:700,textTransform:'uppercase',border:'1px solid',
-                      borderColor:type===wt?C.borderHi:C.border,background:type===wt?'rgba(255,255,255,0.06)':'transparent',
-                      color:type===wt?C.text:C.dim,transition:'all .3s',cursor:'pointer',borderRadius:2}}>
-                    {wt}
-                  </motion.button>
-                ))}
-              </div>
-
-              {/* Name field */}
-              <div style={{marginBottom:22}}>
-                <div style={{borderBottom:`1px solid ${errors.name&&touched.name?'rgba(255,80,60,0.5)':C.border}`,paddingBottom:8,transition:'border-color .2s'}}>
-                  <input
-                    value={name} onChange={change('name', setName)} onBlur={()=>touchField('name')}
-                    placeholder="Your Full Name *" type="text"
-                    style={{background:'transparent',border:'none',outline:'none',color:C.text,...ff.body,fontSize:11,letterSpacing:'.22em',fontWeight:500,width:'100%',padding:'3px 0'}}/>
-                </div>
-                <FieldError field="name"/>
-              </div>
-
-              {/* Phone field */}
-              <div style={{marginBottom:22}}>
-                <div style={{borderBottom:`1px solid ${errors.phone&&touched.phone?'rgba(255,80,60,0.5)':C.border}`,paddingBottom:8,transition:'border-color .2s'}}>
-                  <input
-                    value={phone} onChange={change('phone', setPhone)} onBlur={()=>touchField('phone')}
-                    placeholder="WhatsApp Number * (e.g. +91 98765 43210)" type="tel"
-                    style={{background:'transparent',border:'none',outline:'none',color:C.text,...ff.body,fontSize:11,letterSpacing:'.22em',fontWeight:500,width:'100%',padding:'3px 0'}}/>
-                </div>
-                <FieldError field="phone"/>
-              </div>
-
-              {/* Note / requirement field */}
-              <div style={{marginBottom:24}}>
-                <div style={{borderBottom:`1px solid ${errors.note&&touched.note?'rgba(255,80,60,0.5)':C.border}`,paddingBottom:8,transition:'border-color .2s'}}>
-                  <textarea
-                    value={note} onChange={change('note', setNote)} onBlur={()=>touchField('note')}
-                    placeholder="Describe your requirement — size, deity, metal, temple name, timeline… *" rows={3}
-                    style={{background:'transparent',border:'none',outline:'none',color:C.text,...ff.body,fontSize:11,letterSpacing:'.12em',fontWeight:300,width:'100%',resize:'none',padding:'3px 0',lineHeight:1.85}}/>
-                </div>
-                <FieldError field="note"/>
-              </div>
-
-              {/* Reference image upload */}
-              <div style={{marginBottom:28}}>
-                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-                  <div style={{...ff.body,fontSize:8,letterSpacing:'.38em',color:C.dim,fontWeight:600,textTransform:'uppercase'}}>
-                    Reference Image <span style={{color:C.faint,fontSize:7}}>(Optional)</span>
-                  </div>
-                  {refFile && (
-                    <button onClick={()=>{setRefFile(null);setRefPreview(null);}}
-                      style={{background:'none',border:'none',color:C.faint,fontSize:9,cursor:'pointer',letterSpacing:'.2em',...ff.body,transition:'color .2s',padding:0}}
-                      onMouseEnter={e=>e.target.style.color=C.text} onMouseLeave={e=>e.target.style.color=C.faint}>
-                      ✕ Remove
-                    </button>
-                  )}
-                </div>
-                <input ref={fileRef} type="file" accept="image/*" onChange={handleFile} style={{display:'none'}}/>
-                <div
-                  onClick={()=>!refPreview && fileRef.current.click()}
-                  onDragOver={e=>{e.preventDefault();setDragOver(true);}}
-                  onDragLeave={()=>setDragOver(false)}
-                  onDrop={handleDrop}
-                  style={{border:`1px dashed ${dragOver?C.goldLt:refFile?C.gold:C.border}`,
-                    padding:refPreview?'10px':'24px 16px',cursor:refPreview?'default':'pointer',
-                    display:'flex',alignItems:'center',gap:14,transition:'all .25s',borderRadius:2,
-                    background:dragOver?'rgba(255,228,77,.05)':refPreview?'rgba(255,228,77,.03)':'transparent'}}>
-                  {refPreview ? (
-                    <>
-                      <div style={{position:'relative',flexShrink:0}}>
-                        <img src={refPreview} alt="ref" style={{width:72,height:72,objectFit:'cover',borderRadius:2,border:`1px solid ${C.borderHi}`,display:'block'}}/>
-                        <div style={{position:'absolute',top:3,right:3,width:16,height:16,borderRadius:'50%',background:'rgba(255,228,77,.9)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:8,color:'#000',fontWeight:700}}>✓</div>
-                      </div>
-                      <div style={{flex:1,minWidth:0}}>
-                        <div style={{...ff.body,fontSize:10,color:C.text,letterSpacing:'.1em',fontWeight:500,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{refFile.name}</div>
-                        <div style={{...ff.body,fontSize:8,color:C.gold,letterSpacing:'.18em',marginTop:4,textTransform:'uppercase'}}>
-                          {(refFile.size/1024).toFixed(0)} KB · Image attached
-                        </div>
-                        <button onClick={e=>{e.stopPropagation();fileRef.current.click();}}
-                          style={{marginTop:6,background:'none',border:`1px solid ${C.border}`,borderRadius:2,padding:'3px 10px',...ff.body,fontSize:7.5,letterSpacing:'.18em',color:C.dim,cursor:'pointer',textTransform:'uppercase',transition:'all .2s'}}
-                          onMouseEnter={e=>e.currentTarget.style.borderColor=C.gold} onMouseLeave={e=>e.currentTarget.style.borderColor=C.border}>
-                          Change Image
-                        </button>
-                      </div>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{width:44,height:44,border:`1px solid ${C.border}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,opacity:.45,flexShrink:0,borderRadius:2}}>🖼️</div>
-                      <div>
-                        <div style={{...ff.body,fontSize:10,color:C.dim,letterSpacing:'.1em',marginBottom:3}}>
-                          {dragOver ? 'Drop to attach…' : 'Click or drag a reference photo here'}
-                        </div>
-                        <div style={{...ff.body,fontSize:8,color:C.faint,letterSpacing:'.15em'}}>JPG · PNG · WEBP · Max 10 MB</div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* Submit button — loading state */}
-              <motion.button
-                onClick={submit}
-                disabled={loading}
-                whileHover={loading ? {} : {scale:1.01}}
-                whileTap={loading ? {} : {scale:.98}}
-                style={{
-                  width:'100%',padding:'16px 32px',borderRadius:2,border:'none',cursor:loading?'not-allowed':'pointer',
-                  background:loading?'rgba(255,215,0,0.35)':C.gold,
-                  color:loading?'rgba(0,0,0,0.45)':'#000',
-                  ...ff.body,fontSize:9,letterSpacing:'.38em',fontWeight:700,textTransform:'uppercase',
-                  display:'flex',alignItems:'center',justifyContent:'center',gap:12,
-                  transition:'background .25s,color .25s',position:'relative',overflow:'hidden',
-                }}>
-                {loading ? (
-                  <>
-                    <motion.span
-                      animate={{rotate:360}} transition={{duration:1,repeat:Infinity,ease:'linear'}}
-                      style={{display:'inline-block',width:14,height:14,border:'2px solid rgba(0,0,0,0.3)',borderTopColor:'rgba(0,0,0,0.7)',borderRadius:'50%'}}/>
-                    Sending Inquiry…
-                  </>
-                ) : (
-                  <>
-                    {INQUIRY_ENDPOINT ? 'Send Inquiry →' : 'Send via WhatsApp →'}
-                  </>
-                )}
-              </motion.button>
-
-              {/* Inline validation summary (shown only after first submit attempt) */}
-              {Object.values(errors).some(Boolean) && Object.values(touched).some(Boolean) && (
-                <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{duration:.2}}
-                  style={{marginTop:10,textAlign:'center',...ff.body,fontSize:8,color:'rgba(255,100,80,.75)',letterSpacing:'.14em'}}>
-                  Please fix the errors above before submitting.
-                </motion.div>
-              )}
-
-              <div style={{textAlign:'center',marginTop:12,...ff.body,fontSize:8,color:C.faint,letterSpacing:'.22em'}}>
-                {INQUIRY_ENDPOINT
-                  ? <>Email delivered · WhatsApp backup always available</>
-                  : <>Direct to I. Vijay · {BIZ.phone}</>}
-              </div>
-
-              {/* Always-visible WhatsApp fallback link */}
-              <div style={{textAlign:'center',marginTop:8}}>
-                <button onClick={openWhatsApp}
-                  style={{background:'none',border:'none',cursor:'pointer',...ff.body,fontSize:8,color:C.gold,letterSpacing:'.22em',textDecoration:'underline',textDecorationColor:`${C.gold}55`,textTransform:'uppercase',fontWeight:600}}>
-                  Or message directly on WhatsApp →
-                </button>
-              </div>
-            </div>
-          </SlideRight>
-        </div>
+      <div style={{maxWidth:900,margin:'0 auto',padding:'0 24px',textAlign:'center'}}>
+        <SlideUp>
+          <div style={{fontSize:42,marginBottom:24,color:C.gold,opacity:0.8}}>✧</div>
+          <h2 style={{...ff.display,fontSize:42,color:C.text,marginBottom:16}}>Start Your Sacred Project</h2>
+          <p style={{...ff.body,fontSize:14,color:C.dim,lineHeight:1.8,marginBottom:48,maxWidth:600,margin:'0 auto 48px'}}>
+            We accept a limited number of commissions each year to ensure uncompromising quality. 
+            Connect with I. Vijay to discuss your vision, metal preferences, and custom requirements.
+          </p>
+          <motion.button 
+            onClick={() => setShowCommissionModal(true)}
+            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            style={{
+              padding:'18px 48px',background:C.gold,color:'#000',border:'none',borderRadius:4,
+              fontFamily:"'Jost', sans-serif",fontSize:13,fontWeight:700,letterSpacing:'0.15em',
+              textTransform:'uppercase',cursor:'pointer',boxShadow:`0 10px 40px ${C.gold}33`
+            }}
+          >
+            Enquire Now
+          </motion.button>
+          
+          <div style={{marginTop:48,paddingTop:48,borderTop:`1px solid ${C.border}`,display:'flex',justifyContent:'center',gap:40,flexWrap:'wrap'}}>
+            {[
+              { icon:'☎', txt:BIZ.phone, link:`tel:${BIZ.phoneTel}` },
+              { icon:'✉', txt:BIZ.email, link:`mailto:${BIZ.email}` },
+              { icon:'💬', txt:`WhatsApp: ${BIZ.phone}`, link:BIZ.whatsapp },
+              { icon:'📍', txt:BIZ.address, link:BIZ.mapLink },
+            ].map(c=>(
+              <motion.a key={c.txt} href={c.link} target="_blank" rel="noopener noreferrer" whileHover={{y:-2}}
+                style={{display:'flex',alignItems:'center',gap:12,textDecoration:'none'}}>
+                <span style={{fontSize:16,color:C.gold}}>{c.icon}</span>
+                <span style={{...ff.body,fontSize:11,color:C.dim,letterSpacing:'.05em',textTransform:'uppercase'}}>{c.txt}</span>
+              </motion.a>
+            ))}
+          </div>
+        </SlideUp>
       </div>
     </section>
   );
@@ -3720,12 +4466,2377 @@ const ThemeToggle = ({ mode, setMode, C }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   ROOT APP
+   GALLERY PREVIEW (4-6 featured items for homepage)
 ═══════════════════════════════════════════════════════════════ */
-export default function App() {
+const GalleryPreview = ({ onViewAll }) => {
+  const C = useTheme();
+  const navigate = useNavigate();
+  const { setShowCommissionModal } = useAppCtx();
+  const DI = useIMG();
+  // FIX: Fetch featured items from Supabase (admin uploads) and merge with static items
+  const [liveItems, setLiveItems] = useState([]);
+  useEffect(() => {
+    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+    const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) return;
+    let cancelled = false;
+    fetch(`${supabaseUrl}/rest/v1/gallery_items?is_featured=eq.true&select=*&order=created_at.desc`, {
+      headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
+    })
+    .then(r => r.ok ? r.json() : [])
+    .then(rows => {
+      if (cancelled) return;
+      const valid = (rows || []).filter(r => r.image_url && r.image_url.length > 0);
+      setLiveItems(valid.map(r => ({
+        id: r.id, gid: r.id,
+        deity: r.title,
+        metal: r.metal_type || '',
+        cat: r.category || 'Gold Work',
+        img: r.image_url,
+        artisanNotes: r.artisan_notes || '',
+        description: r.description || '',
+        isFeatured: r.is_featured || false,
+        _isUploaded: true,
+      })));
+    })
+    .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  // Static seed overridden by site_images admin uploads (preview_1..6)
+  const staticPreview = [
+    { id:'p1', gid:'p1', deity:'Sadari Gold Crown',   metal:'24K Gold Nagas',     cat:'Gold Work',   img: DI.preview1 },
+    { id:'p2', gid:'p2', deity:'Crown — Front View',  metal:'Gold Nagas',          cat:'Gold Work',   img: DI.preview2 },
+    { id:'p3', gid:'p3', deity:'Kandabaranam',         metal:'Temple Gold Crown',   cat:'Crown Work',  img: DI.preview3 },
+    { id:'p4', gid:'p4', deity:'Crown Piece I',        metal:'Gold Handwork',       cat:'Gold Work',   img: DI.preview4 },
+    { id:'p5', gid:'p5', deity:'Stone Piece I',        metal:'Stone · Gold Inlay',  cat:'Stone Work',  img: DI.preview5 },
+    { id:'p6', gid:'p6', deity:'Temple Deity',         metal:'Panchaloha Cast',     cat:'Vigraham',    img: DI.preview6 },
+  ];
+
+  // If there are featured uploaded items, show them first; otherwise use site-image-overrideable static seed
+  const featured = liveItems.length > 0
+    ? [...liveItems, ...staticPreview].slice(0, 6)
+    : staticPreview;
+  const [hov, setHov] = useState(null);
+
+  return (
+    <section id="gallery-preview" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
+      <div style={{maxWidth:1240,margin:'0 auto'}}>
+        <Reveal>
+          <div style={{textAlign:'center',marginBottom:56}}>
+            <span style={{...ff.body,fontSize:8,letterSpacing:'.52em',color:C.dim,fontWeight:600,textTransform:'uppercase',display:'block',marginBottom:16,opacity:.8}}>Featured Masterpieces</span>
+            <h2 style={{...ff.display,fontSize:'clamp(34px,5.8vw,70px)',lineHeight:.88,letterSpacing:'.04em',color:C.text,fontWeight:700,marginBottom:16}}>
+              OUR <span style={{color:C.gold}}>SACRED</span><br/>CRAFTSMANSHIP
+            </h2>
+            <p style={{...ff.serif,fontSize:15,color:C.dim,fontStyle:'italic',marginTop:14,maxWidth:540,margin:'14px auto'}}>
+              Handcrafted temple metalwork from our Sowcarpet workshop — each piece a prayer in gold, silver, and sacred alloy.
+            </p>
+          </div>
+        </Reveal>
+
+        {/* Premium Masonry Showcase */}
+        <style>{`
+          .preview-masonry { columns: 3; column-gap: 12px; margin-bottom: 48px; }
+          .preview-masonry-item { break-inside: avoid; margin-bottom: 12px; position: relative; overflow: hidden; border-radius: 8px; border: 1px solid rgba(255,215,0,0.15); cursor: pointer; transition: transform 0.4s, border-color 0.4s; }
+          .preview-masonry-item:hover { transform: translateY(-4px); border-color: rgba(255,215,0,0.4); }
+          .preview-masonry-item img { width: 100%; display: block; filter: sepia(8%); transition: transform 0.8s ease; }
+          .preview-masonry-item:hover img { transform: scale(1.08); }
+          @media (max-width: 768px) {
+            .preview-masonry { columns: 2; column-gap: 8px; }
+            .preview-masonry-item { margin-bottom: 8px; border-radius: 6px; }
+          }
+        `}</style>
+        <div className="preview-masonry">
+          {featured.map((idol,idx)=>{
+            return (
+            <motion.div 
+              key={idol.id}
+              initial={{opacity:0, y:30}}
+              whileInView={{opacity:1, y:0}}
+              viewport={{once:false, margin:"-50px"}}
+              transition={{duration:0.6, delay:idx*0.1}}
+              className="preview-masonry-item"
+              onClick={() => { window.scrollTo({top:0,behavior:'instant'}); navigate('/gallery', { state: { activeId: idol.id } }); }}
+              onHoverStart={()=>setHov(idol.id)} onHoverEnd={()=>setHov(null)}
+              style={{background:C.bg1}}
+            >
+              <img src={idol.img} alt={idol.deity} />
+              <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(14,11,8,0.9) 0%,transparent 60%)',pointerEvents:'none'}}/>
+              <motion.div animate={{y:hov===idol.id?0:8, opacity:hov===idol.id?1:0.8}} transition={{duration:0.3}} style={{position:'absolute',bottom:0,left:0,right:0,padding:'24px 20px', zIndex:2, pointerEvents:'none'}}>
+                <div style={{...ff.display,fontSize:18,color:C.text,fontWeight:600,marginBottom:6,textShadow:'0 2px 10px rgba(0,0,0,0.8)'}}>{idol.deity}</div>
+                <div style={{...ff.body,fontSize:10,color:C.gold,letterSpacing:'.2em',textTransform:'uppercase',fontWeight:700}}>{idol.cat}</div>
+              </motion.div>
+              <div style={{position:'absolute',top:16,left:16,padding:'6px 12px',background:'rgba(0,0,0,0.5)',backdropFilter:'blur(8px)',border:`1px solid rgba(255,215,0,0.3)`,borderRadius:4,color:C.gold,...ff.body,fontSize:9,letterSpacing:'.15em',textTransform:'uppercase',zIndex:2}}>{idol.metal}</div>
+            </motion.div>
+            );
+          })}
+        </div>
+
+        {/* Call to action — View Full Gallery */}
+        <Reveal delay={.15}>
+          <div style={{display:'flex',gap:14,flexWrap:'wrap',justifyContent:'center',marginTop:44,paddingTop:40,borderTop:`1px solid ${C.border}`}}>
+            <CurvyButton primary onClick={() => { window.scrollTo({top:0,behavior:'instant'}); navigate('/gallery'); }}>
+              View Full Gallery
+            </CurvyButton>
+            <StarBorderButton onClick={() => setShowCommissionModal(true)} speed={6}>
+              Commission Now
+            </StarBorderButton>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   HOME PAGE — lightweight landing with featured content
+═══════════════════════════════════════════════════════════════ */
+const HomePage = ({ scrolled }) => {
+  const navigate = useNavigate();
+
+  return (
+    <>
+      <Nav scrolled={scrolled}/>
+      <Hero/>
+      <Ticker/>
+      <Legacy/>
+      <TrustedByTemples/>
+      <Services/>
+      <Showcase/>
+      <RealWorkPhotos/>
+      <ProcessSection/>
+      {/* Featured gallery preview instead of full gallery */}
+      <GalleryPreview onViewAll={() => navigate('/gallery')}/>
+      <Testimonials/>
+      <FAQ/>
+      <Archive/>
+      <Contact/>
+      <Footer/>
+      <WAFab/>
+      <MobileContactBar/>
+    </>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   IMMERSIVE FEED — Instagram/TikTok Style Premium Gallery
+═══════════════════════════════════════════════════════════════ */
+const ImmersiveFeed = () => {
+  const C = useTheme();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const initialId = location.state?.activeId;
+  
+  // If we arrived with an activeId (from home/gallery card click), go straight to fullscreen
+  const [immersiveMode, setImmersiveMode] = useState(initialId !== undefined && initialId !== null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+
+  // FIX: Fetch admin-uploaded items from Supabase and merge with static GALLERY_IDOLS
+  // This ensures uploads from the admin dashboard appear in the gallery immediately
+  const [liveItems, setLiveItems] = useState([]);
+  useEffect(() => {
+    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+    const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+    if (!supabaseUrl || !supabaseKey) return;
+    let cancelled = false;
+    fetch(`${supabaseUrl}/rest/v1/gallery_items?select=*&order=created_at.desc`, {
+      headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${supabaseKey}` }
+    })
+    .then(r => r.ok ? r.json() : [])
+    .then(rows => {
+      if (cancelled) return;
+      const valid = (rows || []).filter(r => r.image_url && r.image_url.length > 0);
+      const mapped = valid.map(r => ({
+        id: r.id, gid: r.id,
+        deity: r.title,                       // Title/caption set in admin
+        metal: r.metal_type || '',
+        purity: r.purity || '',
+        dims: r.dimensions || '',
+        stone: r.stone_type || '',
+        duration: r.crafting_duration || '',
+        origin: 'Sowcarpet',
+        img: r.image_url,
+        cat: r.category || 'Gold Work',
+        artisanNotes: r.artisan_notes || '',
+        description: r.description || '',     // Public caption editable in admin
+        isFeatured: r.is_featured || false,
+        _isUploaded: true,
+      }));
+      setLiveItems(mapped);
+    })
+    .catch(() => {});
+    return () => { cancelled = true; };
+  }, []); // runs once on mount; admin panel changes are picked up on next page load
+
+  // Merge static + live items; deduplicate by image URL so seeded items never show twice
+  const allIdols = useMemo(() => {
+    const uploadedUrls = new Set(liveItems.map(i => i.img));
+    const staticOnly = GALLERY_IDOLS.filter(i => !uploadedUrls.has(i.img));
+    return [...staticOnly, ...liveItems];
+  }, [liveItems]);
+
+  // FIX: useMemo prevents a new array reference on every render, which was causing
+  // the useEffect(,[activeIdx, filteredIdols]) to fire infinitely → screen freeze
+  const filteredIdols = useMemo(() => {
+    const q = (searchQuery || '').toLowerCase();
+    if (!q) return allIdols;
+    return allIdols.filter(i =>
+      i.deity.toLowerCase().includes(q) ||
+      i.cat.toLowerCase().includes(q) ||
+      i.metal.toLowerCase().includes(q)
+    );
+  }, [allIdols, searchQuery]);
+  
+  const initialIdx = initialId !== undefined ? filteredIdols.findIndex(i => i.id === initialId) : 0;
+  const [activeIdx, setActiveIdx] = useState(Math.max(0, initialIdx));
+  const containerRef = useRef(null);
+  const didScrollRef = useRef(false);
+
+  // Scroll to the correct photo immediately on mount — use requestAnimationFrame to ensure DOM is ready
+  const activeIdxRef = useRef(activeIdx);
+  useEffect(() => {
+    if (!immersiveMode || didScrollRef.current) return;
+    const scrollToIdx = () => {
+      if (containerRef.current) {
+        containerRef.current.scrollTop = activeIdxRef.current * window.innerHeight;
+        didScrollRef.current = true;
+      } else {
+        requestAnimationFrame(scrollToIdx);
+      }
+    };
+    requestAnimationFrame(scrollToIdx);
+  }, [immersiveMode]); // intentionally runs only when immersiveMode changes
+
+  // Load user state from localStorage + initialize with real counts
+  const userState = getUserState();
+  const [liked, setLiked] = useState(userState.likes);
+  const [saved, setSaved] = useState(userState.saves);
+  const [comments, setComments] = useState(userState.comments);
+  const [likesCounts, setLikesCounts] = useState({});
+  const [savesCounts, setSavesCounts] = useState({});
+  const [realComments, setRealComments] = useState({});
+  
+  const [showComments, setShowComments] = useState(false);
+  const [commentInput, setCommentInput] = useState('');
+  const [showProfile, setShowProfile] = useState(false);
+  const [showDetailPanel, setShowDetailPanel] = useState(false);
+  const [detailPanelExpanded, setDetailPanelExpanded] = useState(false);
+  const [showShareMenu, setShowShareMenu] = useState(false);
+  const [doubleTapGlow, setDoubleTapGlow] = useState(false);
+  const [saveAnimMsg, setSaveAnimMsg] = useState(false);
+
+  const { isLoggedIn, user, setShowAuthModal, setAuthAction, setShowCommissionModal } = useAppCtx();
+  const userId = user?.id || 'guest';
+
+  // Load real counts for active item
+  // FIX: Depend on idol.id (primitive) not filteredIdols (new array ref each render)
+  // and extract isLoggedIn/userId as stable refs to avoid re-firing on auth changes
+  const activeIdolId = filteredIdols[activeIdx]?.id ?? null;
+  const isLoggedInRef = useRef(isLoggedIn);
+  const userIdRef = useRef(userId);
+  useEffect(() => { isLoggedInRef.current = isLoggedIn; }, [isLoggedIn]);
+  useEffect(() => { userIdRef.current = userId; }, [userId]);
+
+  useEffect(() => {
+    if (!activeIdolId) return;
+    let cancelled = false;
+
+    (async () => {
+      const count = await getIdolLikesCount(activeIdolId);
+      if (!cancelled) setLikesCounts(p => ({...p, [activeIdolId]: count}));
+    })();
+
+    (async () => {
+      const count = await getIdolSavesCount(activeIdolId);
+      if (!cancelled) setSavesCounts(p => ({...p, [activeIdolId]: count}));
+    })();
+
+    (async () => {
+      const data = await getIdolComments(activeIdolId);
+      if (!cancelled) setRealComments(p => ({...p, [activeIdolId]: data}));
+    })();
+
+    if (isLoggedInRef.current) {
+      logViewEvent(activeIdolId, userIdRef.current);
+    }
+
+    return () => { cancelled = true; };
+  }, [activeIdolId]); // only re-fire when the active item actually changes
+
+  // FIX: Memoize scroll handler — prevents new function ref on every render
+  const filteredIdolsLengthRef = useRef(filteredIdols.length);
+  useEffect(() => { filteredIdolsLengthRef.current = filteredIdols.length; }, [filteredIdols.length]);
+
+  const handleScroll = useCallback((e) => {
+    const container = e.target;
+    const itemHeight = window.innerHeight;
+    const index = Math.round(container.scrollTop / itemHeight);
+    if (index !== activeIdx && index >= 0 && index < filteredIdolsLengthRef.current) {
+      setActiveIdx(index);
+      setShowComments(false);
+      setShowDetailPanel(false);
+      setShowShareMenu(false);
+    }
+  }, [activeIdx]); // only activeIdx is read from closure
+
+  // FIX: Stable reference for handleInteraction — reads isLoggedIn from ref
+  const handleInteraction = useCallback((actionType) => {
+    if (!isLoggedInRef.current) {
+      setAuthAction(actionType);
+      setShowAuthModal(true);
+      return false;
+    }
+    return true;
+  }, [setAuthAction, setShowAuthModal]); // context setters are stable
+
+  const toggleLike = useCallback((id) => {
+    if (handleInteraction('like')) {
+      const isCurrentlyLiked = liked[id];
+      // FIX: Update React state optimistically
+      setLiked(p => ({...p, [id]: !isCurrentlyLiked}));
+      // FIX: Update display count optimistically
+      setLikesCounts(p => ({
+        ...p,
+        [id]: Math.max(0, (p[id] || 0) + (isCurrentlyLiked ? -1 : 1))
+      }));
+      // FIX: toggleIdolLike already handles localStorage + Supabase — don't double-write
+      toggleIdolLike(id, userId, isCurrentlyLiked);
+    }
+  }, [liked, userId]); // stable deps — no filteredIdols reference
+
+  const toggleSave = useCallback((id) => {
+    if (handleInteraction('save')) {
+      const isCurrentlySaved = saved[id];
+      // FIX: Update React state optimistically
+      setSaved(p => ({...p, [id]: !isCurrentlySaved}));
+      // FIX: Update display count optimistically
+      setSavesCounts(p => ({
+        ...p,
+        [id]: Math.max(0, (p[id] || 0) + (isCurrentlySaved ? -1 : 1))
+      }));
+      if (!isCurrentlySaved) {
+        setSaveAnimMsg(true);
+        setTimeout(() => setSaveAnimMsg(false), 2000);
+      }
+      // FIX: toggleIdolSave already handles localStorage + Supabase — don't double-write
+      toggleIdolSave(id, userId, isCurrentlySaved);
+    }
+  }, [saved, userId]); // stable deps — no filteredIdols reference
+
+  const postComment = useCallback((id) => {
+    if (!handleInteraction('comment')) return;
+    if (!commentInput.trim()) return;
+    const text = commentInput.trim();
+    const username = userIdRef.current !== 'guest' ? (userIdRef.current?.split?.('@')[0] || 'Guest') : 'Guest';
+    // FIX: Optimistic UI update only — addIdolComment handles localStorage + Supabase
+    setComments(p => ({
+      ...p,
+      [id]: [...(p[id] || []), {
+        text, user: username, time: 'Just now', id: 'temp_' + Date.now()
+      }]
+    }));
+    addIdolComment(id, userIdRef.current, text);
+    setCommentInput('');
+  }, [commentInput, handleInteraction]); // stable refs used for userId
+
+  // FIX: Use a ref for liked so double-tap callback is always stable (no stale closure)
+  const likedRef = useRef(liked);
+  useEffect(() => { likedRef.current = liked; }, [liked]);
+
+  const handleDoubleTap = useCallback((id) => {
+    // Show glow animation regardless of login state
+    setDoubleTapGlow(true);
+    setTimeout(() => setDoubleTapGlow(false), 800);
+    // Only like if logged in AND not already liked (prevent double-fire)
+    if (isLoggedInRef.current && !likedRef.current[id]) {
+      setLiked(p => ({...p, [id]: true}));
+      setLikesCounts(p => ({...p, [id]: (p[id] || 0) + 1}));
+      // toggleIdolLike handles localStorage + Supabase
+      toggleIdolLike(id, userIdRef.current, false);
+    }
+  }, []); // empty deps — reads from refs, never stale
+
+  const activeItem = filteredIdols[activeIdx];
+
+  // Icons
+  const IconHeart = ({ filled }) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill={filled ? '#FFD700' : 'none'} stroke={filled ? '#FFD700' : 'currentColor'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+    </svg>
+  );
+  const IconComment = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
+    </svg>
+  );
+  const IconBookmark = ({ filled }) => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill={filled ? '#FFD700' : 'none'} stroke={filled ? '#FFD700' : 'currentColor'} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"></path>
+    </svg>
+  );
+  const IconShare = () => (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="18" cy="5" r="3"></circle><circle cx="6" cy="12" r="3"></circle><circle cx="18" cy="19" r="3"></circle>
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+    </svg>
+  );
+
+  return (
+    <div style={{
+      position: 'fixed',
+      inset: 0,
+      background: '#050402',
+      // NO overflow:hidden — this traps scroll inside child containers
+      color: '#fff',
+      zIndex: 2000,
+    }}>
+      {/* Floating Search Bar — solid background on mobile avoids GPU-intensive backdrop-filter on scroll */}
+      <motion.div
+        initial={{ y: -80, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+        transition={{ type: 'spring', damping: 22, stiffness: 120, delay: 0.1 }}
+        style={{
+          position: 'fixed',
+          top: 'env(safe-area-inset-top, 0px)',
+          left: 0, right: 0,
+          zIndex: 160,
+          display: 'flex',
+          justifyContent: 'center',
+          padding: '10px 16px 6px',
+          // Solid background is faster on mobile than blur — same visual result
+          background: 'linear-gradient(to bottom, rgba(5,4,2,0.97) 60%, transparent 100%)',
+          pointerEvents: isSearchOpen || !immersiveMode ? 'auto' : 'none',
+        }}
+      >
+        <div style={{
+          background: isSearchOpen ? 'rgba(22,18,14,0.96)' : 'rgba(22,18,14,0.7)',
+          border: `1px solid ${isSearchOpen ? 'rgba(255,215,0,0.4)' : 'rgba(255,215,0,0.15)'}`,
+          borderRadius: 28,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '9px 16px',
+          width: isSearchOpen ? '100%' : 'auto',
+          maxWidth: 520,
+          transition: 'all 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
+          gap: 8,
+        }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,215,0,0.7)" strokeWidth="2" style={{ flexShrink: 0, cursor: 'pointer' }} onClick={() => setIsSearchOpen(true)}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          {isSearchOpen ? (
+            <>
+              <input
+                autoFocus
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Search deity, metal, category…"
+                style={{ background: 'transparent', border: 'none', color: '#fff', outline: 'none', flex: 1, fontFamily: "'Jost', sans-serif", fontSize: 14, letterSpacing: '0.04em', minWidth: 0 }}
+                onBlur={() => !searchQuery && setIsSearchOpen(false)}
+              />
+              {searchQuery && (
+                <button onClick={() => { setSearchQuery(''); setIsSearchOpen(false); }} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 18, cursor: 'pointer', padding: 0, lineHeight: 1, flexShrink: 0, touchAction: 'manipulation' }}>×</button>
+              )}
+            </>
+          ) : (
+            <span onClick={() => setIsSearchOpen(true)} style={{ fontFamily: "'Jost', sans-serif", fontSize: 12, color: 'rgba(255,215,0,0.6)', letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', userSelect: 'none' }}>Search</span>
+          )}
+        </div>
+      </motion.div>
+
+      {!immersiveMode ? (
+        /* ═══════════════════════════════════════════════════════
+           PREMIUM MASONRY GALLERY
+           Mobile-first: 2 col on phones, 3 col on tablets/desktop
+           Pinterest + Luxury Portfolio aesthetic on ALL devices
+        ═══════════════════════════════════════════════════════ */
+        <div style={{
+          height: '100vh',
+          width: '100vw',
+          overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch', // iOS momentum scroll
+          overscrollBehavior: 'contain',
+          paddingTop: 80, // space for floating search bar
+          paddingBottom: 100, // space for bottom nav
+          boxSizing: 'border-box',
+        }}>
+          <style>{`
+            /* ── Masonry grid ── */
+            .vmw-masonry {
+              column-count: 2;
+              column-gap: 8px;
+              padding: 0 10px 16px;
+              margin: 0 auto;
+            }
+            @media (min-width: 600px) {
+              .vmw-masonry {
+                column-count: 3;
+                column-gap: 12px;
+                padding: 0 16px 24px;
+                max-width: 900px;
+              }
+            }
+            @media (min-width: 1024px) {
+              .vmw-masonry {
+                column-count: 3;
+                column-gap: 20px;
+                padding: 0 32px 40px;
+                max-width: 1400px;
+              }
+            }
+            @media (min-width: 1400px) {
+              .vmw-masonry {
+                column-count: 4;
+                column-gap: 24px;
+                max-width: 1600px;
+              }
+            }
+
+            /* ── Masonry card ── */
+            .vmw-card {
+              break-inside: avoid;
+              -webkit-column-break-inside: avoid;
+              margin-bottom: 8px;
+              position: relative;
+              border-radius: 10px;
+              overflow: hidden;
+              cursor: pointer;
+              border: 1px solid rgba(255,215,0,0.12);
+              background: rgba(14,11,8,0.8);
+              display: block;
+              /* GPU compositing layer — prevents paint thrashing on scroll */
+              will-change: transform;
+              transform: translateZ(0);
+            }
+            @media (min-width: 600px) {
+              .vmw-card { margin-bottom: 12px; border-radius: 12px; }
+            }
+            @media (min-width: 1024px) {
+              .vmw-card { margin-bottom: 20px; border-radius: 16px; }
+            }
+
+            /* ── Card image ── */
+            .vmw-card img {
+              width: 100%;
+              display: block;
+              /* Natural aspect ratio — no crop, no stretch */
+              height: auto;
+              object-fit: cover;
+              /* Slight warmth filter matching the luxury aesthetic */
+              filter: sepia(5%) brightness(0.96);
+              transition: transform 0.6s ease, filter 0.4s ease;
+            }
+            /* Hover only on pointer devices — no ghost hover on mobile */
+            @media (hover: hover) {
+              .vmw-card:hover { border-color: rgba(255,215,0,0.4); }
+              .vmw-card:hover img { transform: scale(1.06); filter: sepia(8%) brightness(1.02); }
+            }
+            /* Touch active state for mobile */
+            .vmw-card:active { opacity: 0.88; }
+
+            /* ── Card overlay text ── */
+            .vmw-card-overlay {
+              position: absolute;
+              bottom: 0; left: 0; right: 0;
+              background: linear-gradient(to top, rgba(5,3,1,0.96) 0%, rgba(0,0,0,0.5) 55%, transparent 100%);
+              padding: 28px 12px 12px;
+              pointer-events: none;
+            }
+            @media (min-width: 600px) {
+              .vmw-card-overlay { padding: 36px 16px 14px; }
+            }
+            @media (min-width: 1024px) {
+              .vmw-card-overlay { padding: 44px 20px 18px; }
+            }
+
+            /* ── Card title ── */
+            .vmw-card-title {
+              font-family: 'Cinzel', serif;
+              font-size: 12px;
+              font-weight: 600;
+              color: #FFD700;
+              margin: 0 0 3px;
+              text-shadow: 0 1px 6px rgba(0,0,0,0.9);
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            @media (min-width: 600px) { .vmw-card-title { font-size: 14px; } }
+            @media (min-width: 1024px) { .vmw-card-title { font-size: 17px; margin-bottom: 5px; } }
+
+            /* ── Card subtitle ── */
+            .vmw-card-sub {
+              font-family: 'Jost', sans-serif;
+              font-size: 8px;
+              font-weight: 600;
+              color: rgba(255,255,255,0.6);
+              text-transform: uppercase;
+              letter-spacing: 0.12em;
+              margin: 0;
+            }
+            @media (min-width: 600px) { .vmw-card-sub { font-size: 9px; } }
+            @media (min-width: 1024px) { .vmw-card-sub { font-size: 11px; } }
+
+            /* ── Metal badge ── */
+            .vmw-card-badge {
+              position: absolute;
+              top: 10px; left: 10px;
+              padding: 3px 7px;
+              background: rgba(0,0,0,0.55);
+              backdrop-filter: blur(6px);
+              -webkit-backdrop-filter: blur(6px);
+              border: 1px solid rgba(255,215,0,0.3);
+              border-radius: 4px;
+              color: #FFD700;
+              font-family: 'Jost', sans-serif;
+              font-size: 7px;
+              font-weight: 700;
+              letter-spacing: 0.14em;
+              text-transform: uppercase;
+              pointer-events: none;
+              /* Limit badge length on narrow cards */
+              max-width: calc(100% - 20px);
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            @media (min-width: 600px) { .vmw-card-badge { font-size: 8px; padding: 4px 8px; top: 12px; left: 12px; } }
+            @media (min-width: 1024px) { .vmw-card-badge { font-size: 9px; padding: 5px 10px; top: 14px; left: 14px; } }
+
+            /* ── Empty state ── */
+            .vmw-empty {
+              grid-column: 1 / -1;
+              text-align: center;
+              padding: 80px 24px;
+              color: rgba(255,255,255,0.3);
+              font-family: 'Cormorant Garamond', serif;
+              font-size: 20px;
+              font-style: italic;
+            }
+
+            /* ── Masonry section heading ── */
+            .vmw-gallery-heading {
+              text-align: center;
+              padding: 8px 16px 24px;
+            }
+            .vmw-gallery-heading h1 {
+              font-family: 'Cinzel', serif;
+              font-size: clamp(22px, 6vw, 48px);
+              color: #FFD700;
+              margin: 0 0 6px;
+              font-weight: 700;
+              letter-spacing: 0.04em;
+            }
+            .vmw-gallery-heading p {
+              font-family: 'Cormorant Garamond', serif;
+              font-size: clamp(13px, 3vw, 16px);
+              color: rgba(255,255,255,0.55);
+              font-style: italic;
+              margin: 0;
+            }
+          `}</style>
+
+          {/* Gallery heading */}
+          <div className="vmw-gallery-heading">
+            <h1>Sacred Craftsmanship</h1>
+            <p>Handcrafted temple metalwork · Sowcarpet, Chennai · Est. 1915</p>
+          </div>
+
+          {/* Masonry grid */}
+          <div className="vmw-masonry" style={{ margin: '0 auto' }}>
+            {filteredIdols.length === 0 ? (
+              <div className="vmw-empty">No masterpieces found for "{searchQuery}"</div>
+            ) : (
+              filteredIdols.map((idol, i) => (
+                <div
+                  key={idol.gid || idol.id}
+                  className="vmw-card"
+                  onClick={() => {
+                    setActiveIdx(i);
+                    didScrollRef.current = false;
+                    setImmersiveMode(true);
+                  }}
+                >
+                  {/* Lazy-loaded image preserving natural aspect ratio */}
+                  <img
+                    src={idol.img}
+                    alt={idol.deity}
+                    loading="lazy"
+                    decoding="async"
+                  />
+
+                  {/* Gradient overlay + text */}
+                  <div className="vmw-card-overlay">
+                    <div className="vmw-card-title">{idol.deity}</div>
+                    <p className="vmw-card-sub">{idol.cat}</p>
+                  </div>
+
+                  {/* Metal badge */}
+                  <div className="vmw-card-badge">{idol.metal}</div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      ) : (
+        /* ═══════════════════════════════════════════════════════
+           IMMERSIVE FULLSCREEN VIEWER
+           Instagram/TikTok style — fires ONLY when card clicked
+        ═══════════════════════════════════════════════════════ */
+        <div
+          ref={containerRef}
+          onScroll={handleScroll}
+          style={{
+            position: 'fixed', // fixed on mobile prevents body scroll interference
+            inset: 0,
+            overflowY: 'scroll',
+            overflowX: 'hidden',
+            scrollSnapType: 'y mandatory',
+            // NO scrollBehavior:'smooth' — it conflicts with scroll snapping on iOS
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'pan-y', // iOS needs explicit touch-action for snap scroll
+            overscrollBehavior: 'none',
+          }}
+        >
+          {/* Back button — mobile safe area aware */}
+          <motion.button
+            initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}
+            onClick={() => {
+              setImmersiveMode(false);
+              setShowDetailPanel(false);
+              setShowComments(false);
+              setShowShareMenu(false);
+            }}
+            style={{
+              position: 'fixed',
+              top: 'calc(env(safe-area-inset-top, 16px) + 16px)',
+              left: 16,
+              zIndex: 200,
+              background: 'rgba(0,0,0,0.55)',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255,215,0,0.3)',
+              borderRadius: '50%',
+              width: 44, height: 44,
+              color: '#FFD700',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              touchAction: 'manipulation',
+            }}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+          </motion.button>
+
+          {filteredIdols.map((idol, idx) => (
+            <div
+              key={idol.gid || idol.id}
+              onDoubleClick={() => handleDoubleTap(idol.gid)}
+              style={{
+                height: '100dvh', // dynamic viewport height — fixes iOS Safari chrome offset
+                width: '100vw',
+                scrollSnapAlign: 'start',
+                scrollSnapStop: 'always', // forces one-at-a-time snap
+                position: 'relative',
+                overflow: 'hidden',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
+              {/* Background blur — pointerEvents:none prevents gesture steal */}
+              <img
+                src={idol.img}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(50px) brightness(0.22)', transform: 'scale(1.15)', pointerEvents: 'none' }}
+                alt=""
+                loading={Math.abs(idx - activeIdx) > 2 ? 'lazy' : 'eager'}
+              />
+
+              {/* Main cinema image — contained, never cropped */}
+              <motion.img
+                src={idol.img}
+                alt={idol.deity}
+                loading={Math.abs(idx - activeIdx) > 2 ? 'lazy' : 'eager'}
+                initial={{ scale: 1.04 }}
+                animate={{ scale: idx === activeIdx ? 1 : 1.04 }}
+                transition={{ duration: 1.4, ease: [0.16, 1, 0.3, 1] }}
+                style={{
+                  position: 'relative',
+                  maxWidth: 'min(88vw, 540px)',
+                  maxHeight: 'min(72vh, 640px)',
+                  width: 'auto',
+                  height: 'auto',
+                  objectFit: 'contain',
+                  zIndex: 1,
+                  filter: 'drop-shadow(0 16px 40px rgba(0,0,0,0.92))',
+                  borderRadius: 10,
+                  pointerEvents: 'none',
+                }}
+              />
+
+              {/* Double-tap glow — pointerEvents:none */}
+              <AnimatePresence>
+                {doubleTapGlow && idx === activeIdx && (
+                  <motion.div
+                    initial={{ scale: 0.5, opacity: 0 }}
+                    animate={{ scale: 1.4, opacity: 1 }}
+                    exit={{ scale: 2, opacity: 0 }}
+                    transition={{ duration: 0.7, ease: 'easeOut' }}
+                    style={{ position: 'absolute', zIndex: 10, display: 'flex', justifyContent: 'center', alignItems: 'center', pointerEvents: 'none' }}
+                  >
+                    <IconHeart filled />
+                    <div style={{ position: 'absolute', inset: -24, background: 'radial-gradient(circle, rgba(255,215,0,0.55) 0%, transparent 70%)', filter: 'blur(12px)', pointerEvents: 'none' }} />
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Saved toast — pointerEvents:none */}
+              <AnimatePresence>
+                {saveAnimMsg && idx === activeIdx && (
+                  <motion.div
+                    initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }}
+                    style={{ position: 'absolute', top: '18%', background: 'rgba(255,215,0,0.14)', backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)', border: '1px solid rgba(255,215,0,0.5)', color: '#FFD700', padding: '10px 20px', borderRadius: 28, zIndex: 50, fontFamily: "'Jost', sans-serif", fontSize: 12, letterSpacing: '0.1em', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: 8, pointerEvents: 'none' }}
+                  >
+                    <IconBookmark filled /> Saved to Collection
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              {/* Bottom gradient — pointerEvents:none */}
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.95) 0%, rgba(0,0,0,0.25) 45%, transparent 100%)', pointerEvents: 'none', zIndex: 2 }} />
+
+              {/* LEFT: Title + subtitle + View More */}
+              <div style={{
+                position: 'absolute',
+                bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
+                left: 16,
+                right: 80, // leave room for right-side action buttons
+                zIndex: 3,
+                pointerEvents: 'auto', // buttons need to be tappable
+              }}>
+                <motion.div
+                  initial={{ opacity: 0, x: -24 }}
+                  animate={{ opacity: idx === activeIdx ? 1 : 0, x: idx === activeIdx ? 0 : -24 }}
+                  transition={{ duration: 0.7, delay: 0.15, ease: [0.16, 1, 0.3, 1] }}
+                >
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+                    <span style={{ background: 'rgba(255,215,0,0.07)', border: '1px solid rgba(255,215,0,0.28)', padding: '4px 8px', borderRadius: 5, fontSize: 8, textTransform: 'uppercase', color: '#FFD700', letterSpacing: '0.14em', fontWeight: 700, backdropFilter: 'blur(6px)' }}>{idol.cat}</span>
+                    <span style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', padding: '4px 8px', borderRadius: 5, fontSize: 8, textTransform: 'uppercase', color: 'rgba(255,255,255,0.85)', letterSpacing: '0.14em', fontWeight: 600, backdropFilter: 'blur(6px)' }}>{idol.metal}</span>
+                  </div>
+                  <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 'clamp(20px, 5.5vw, 38px)', margin: '0 0 6px', color: '#FFD700', textShadow: '0 3px 10px rgba(0,0,0,0.95)', fontWeight: 600, lineHeight: 1.1 }}>{idol.deity}</h2>
+                  <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 'clamp(13px, 3.5vw, 16px)', color: 'rgba(255,255,255,0.8)', margin: 0, textShadow: '0 2px 4px rgba(0,0,0,0.9)', fontStyle: 'italic', lineHeight: 1.5 }}>
+                    {idol.artisanNotes ? idol.artisanNotes.slice(0, 72) + '…' : 'Sacred craftsmanship · Sowcarpet workshop'}
+                  </p>
+                  <button
+                    onClick={() => setShowDetailPanel(true)}
+                    style={{ background: 'none', border: 'none', color: '#FFD700', fontFamily: "'Jost', sans-serif", fontSize: 11, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', padding: '10px 0 0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, opacity: 0.85, touchAction: 'manipulation' }}
+                  >
+                    View More <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                  </button>
+                </motion.div>
+              </div>
+
+              {/* RIGHT: Action buttons — gid-keyed, safe-area aware */}
+              <div style={{
+                position: 'absolute',
+                bottom: 'calc(env(safe-area-inset-bottom, 0px) + 96px)',
+                right: 12,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 20,
+                alignItems: 'center',
+                zIndex: 3,
+              }}>
+                {[
+                  { key: 'like',    icon: <IconHeart filled={!!liked[idol.gid]}/>,    count: likesCounts[idol.gid] ?? '0', action: () => toggleLike(idol.gid),    active: !!liked[idol.gid] },
+                  { key: 'comment', icon: <IconComment/>,                              count: (realComments[idol.gid]?.length ?? 0) || '0', action: () => setShowComments(true), active: false },
+                  { key: 'save',    icon: <IconBookmark filled={!!saved[idol.gid]}/>, count: savesCounts[idol.gid] ?? '0', action: () => toggleSave(idol.gid),    active: !!saved[idol.gid] },
+                  { key: 'share',   icon: <IconShare/>,                               count: 'Share',                      action: () => setShowShareMenu(true),  active: false },
+                ].map((btn, i) => (
+                  <motion.div
+                    key={btn.key}
+                    initial={{ opacity: 0, x: 24 }}
+                    animate={{ opacity: idx === activeIdx ? 1 : 0, x: idx === activeIdx ? 0 : 24 }}
+                    transition={{ duration: 0.5, delay: 0.2 + i * 0.08 }}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}
+                  >
+                    <motion.button
+                      whileTap={{ scale: 0.88 }}
+                      onClick={btn.action}
+                      style={{
+                        background: 'none', border: 'none',
+                        color: btn.active ? '#FFD700' : 'rgba(255,255,255,0.92)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer',
+                        padding: 8,
+                        touchAction: 'manipulation',
+                        // Minimum 44×44 touch target per Apple HIG
+                        minWidth: 44, minHeight: 44,
+                        filter: btn.active ? 'drop-shadow(0 0 6px rgba(255,215,0,0.7))' : 'none',
+                        transition: 'color 0.25s, filter 0.25s',
+                      }}
+                    >
+                      {btn.icon}
+                    </motion.button>
+                    <span style={{ fontFamily: "'Jost', sans-serif", fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,0.75)', textShadow: '0 1px 4px rgba(0,0,0,0.8)', userSelect: 'none' }}>{btn.count}</span>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* DETAIL PANEL — Bottom sheet on mobile, side panel on desktop */}
+      <AnimatePresence>
+        {showDetailPanel && activeItem && (
+          <>
+            {/* Backdrop for mobile bottom-sheet dismiss */}
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              onClick={() => setShowDetailPanel(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 148, background: 'rgba(0,0,0,0.5)' }}
+            />
+            <motion.div
+              initial={{ y: '100%' }}
+              animate={{ y: 0 }}
+              exit={{ y: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+              onClick={e => e.stopPropagation()}
+              style={{
+                position: 'fixed',
+                bottom: 0, left: 0, right: 0,
+                maxHeight: '80vh',
+                background: 'linear-gradient(180deg, rgba(22,18,14,0.98) 0%, rgba(12,9,6,1) 100%)',
+                backdropFilter: 'blur(24px)',
+                WebkitBackdropFilter: 'blur(24px)',
+                borderTop: '1px solid rgba(255,215,0,0.2)',
+                borderRadius: '28px 28px 0 0',
+                zIndex: 149,
+                overflowY: 'auto',
+                WebkitOverflowScrolling: 'touch',
+                paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 24px)',
+                boxShadow: '0 -24px 80px rgba(0,0,0,0.8)',
+              }}
+            >
+              {/* Drag handle */}
+              <div style={{ width: 40, height: 4, background: 'rgba(255,215,0,0.3)', borderRadius: 2, margin: '16px auto 0', flexShrink: 0 }} />
+
+              <div style={{ padding: '20px 24px 8px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <h2 style={{ fontFamily: "'Cinzel', serif", fontSize: 'clamp(18px, 5vw, 26px)', color: '#FFD700', margin: '0 0 6px' }}>{activeItem.deity}</h2>
+                  <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: 'rgba(255,255,255,0.6)', fontStyle: 'italic', margin: 0 }}>Sacred craftsmanship · Sowcarpet</p>
+                </div>
+                <button
+                  onClick={() => setShowDetailPanel(false)}
+                  style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 28, cursor: 'pointer', lineHeight: 1, flexShrink: 0, padding: 4, touchAction: 'manipulation' }}
+                >×</button>
+              </div>
+
+              {/* Metadata grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, padding: '16px 24px', borderTop: '1px solid rgba(255,215,0,0.1)' }}>
+                {[
+                  { l: 'Material', v: activeItem.metal },
+                  { l: 'Category', v: activeItem.cat },
+                  { l: 'Crafting Time', v: '45–60 Days' },
+                  { l: 'Origin', v: 'Sowcarpet, Chennai' },
+                  { l: 'Technique', v: 'Lost Wax Casting' },
+                  { l: 'Purity', v: 'Certified' },
+                ].map(d => (
+                  <div key={d.l} style={{ paddingBottom: 10, borderBottom: '1px solid rgba(255,215,0,0.08)' }}>
+                    <div style={{ fontFamily: "'Jost', sans-serif", fontSize: 9, color: 'rgba(255,215,0,0.7)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 3, fontWeight: 700 }}>{d.l}</div>
+                    <div style={{ fontFamily: "'Jost', sans-serif", fontSize: 13, color: '#FFF' }}>{d.v || '—'}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Artisan notes */}
+              {activeItem.artisanNotes && (
+                <div style={{ padding: '0 24px 16px', borderTop: '1px solid rgba(255,215,0,0.1)', paddingTop: 16 }}>
+                  <div style={{ fontFamily: "'Jost', sans-serif", fontSize: 9, color: 'rgba(255,215,0,0.7)', textTransform: 'uppercase', letterSpacing: '0.14em', marginBottom: 8, fontWeight: 700 }}>Artisan Notes</div>
+                  <p style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 14, color: 'rgba(255,255,255,0.82)', lineHeight: 1.7, margin: 0, fontStyle: 'italic' }}>{activeItem.artisanNotes}</p>
+                </div>
+              )}
+
+              {/* Commission CTA */}
+              <div style={{ padding: '16px 24px' }}>
+                <motion.button
+                  whileTap={{ scale: 0.97 }}
+                  onClick={() => { setShowDetailPanel(false); setShowCommissionModal(true); }}
+                  style={{ width: '100%', padding: '16px 24px', background: 'linear-gradient(135deg, rgba(255,215,0,0.18) 0%, rgba(255,215,0,0.08) 100%)', border: '1px solid rgba(255,215,0,0.45)', borderRadius: 12, color: '#FFD700', fontFamily: "'Jost', sans-serif", fontWeight: 700, fontSize: 13, letterSpacing: '0.1em', textTransform: 'uppercase', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, touchAction: 'manipulation' }}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                  Commission This Piece
+                </motion.button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* SHARE MENU — position:fixed works on all mobile contexts */}
+      <AnimatePresence>
+        {showShareMenu && (
+          <motion.div
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', zIndex: 300, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+            onClick={() => setShowShareMenu(false)}
+          >
+            <motion.div
+              initial={{ y: 80, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 80, opacity: 0 }}
+              transition={{ type: 'spring', damping: 26, stiffness: 200 }}
+              onClick={e => e.stopPropagation()}
+              style={{ width: '100%', maxWidth: 480, background: 'rgba(18,14,10,0.99)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: '24px 24px 0 0', padding: '24px 24px', paddingBottom: 'calc(24px + env(safe-area-inset-bottom, 0px))', boxShadow: '0 -12px 48px rgba(0,0,0,0.8)' }}
+            >
+              <div style={{ width: 36, height: 4, background: 'rgba(255,215,0,0.25)', borderRadius: 2, margin: '0 auto 20px' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+                <span style={{ fontFamily: "'Jost', sans-serif", fontSize: 13, letterSpacing: '0.15em', textTransform: 'uppercase', color: 'rgba(255,215,0,0.85)', fontWeight: 700 }}>Share This Piece</span>
+                <button onClick={() => setShowShareMenu(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.4)', fontSize: 24, cursor: 'pointer', touchAction: 'manipulation' }}>×</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                {[
+                  { label: 'Copy Link', icon: '🔗', action: () => { navigator.clipboard?.writeText(window.location.href); setShowShareMenu(false); } },
+                  { label: 'WhatsApp', icon: '💬', action: () => window.open(`https://wa.me/?text=${encodeURIComponent((activeItem?.deity || '') + ' — ' + window.location.href)}`) },
+                  { label: 'Instagram', icon: '📸', action: () => {} },
+                  { label: 'Pinterest', icon: '📌', action: () => {} },
+                ].map(p => (
+                  <button
+                    key={p.label}
+                    onClick={p.action}
+                    style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, padding: '14px 8px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, cursor: 'pointer', color: '#FFF', touchAction: 'manipulation' }}
+                  >
+                    <span style={{ fontSize: 22 }}>{p.icon}</span>
+                    <span style={{ fontFamily: "'Jost', sans-serif", fontSize: 9, color: 'rgba(255,255,255,0.6)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>{p.label}</span>
+                  </button>
+                ))}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* LUXURY COMMENT DRAWER */}
+      <AnimatePresence>
+        {showComments && activeItem && (
+          <motion.div initial={{ y: '100%' }} animate={{ y: '0%' }} exit={{ y: '100%' }} transition={{ type: 'spring', damping: 28, stiffness: 220 }} style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '65vh', background: 'rgba(15, 12, 10, 0.85)', backdropFilter: 'blur(40px)', borderTop: '1px solid rgba(255,215,0,0.15)', borderRadius: '32px 32px 0 0', zIndex: 150, display: 'flex', flexDirection: 'column', boxShadow: '0 -24px 80px rgba(0,0,0,0.8)' }}>
+            <div style={{ padding: '24px 32px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><IconComment/><h3 style={{ margin: 0, fontSize: 14, fontFamily: "'Jost', sans-serif", letterSpacing: '0.15em', textTransform: 'uppercase', color: '#FFD700' }}>Admirations</h3></div>
+              <button onClick={() => setShowComments(false)} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,0.5)', fontSize: 28, cursor: 'pointer' }}>×</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '32px' }}>
+              {((realComments[activeItem.gid] || []).concat(comments[activeItem.gid] || [])).length === 0 ? (
+                <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', marginTop: 60, fontFamily: "'Cormorant Garamond', serif", fontSize: 22, fontStyle: 'italic' }}>A silent admiration.<br/>Be the first to share your thoughts.</div>
+              ) : (
+                ((realComments[activeItem.gid] || []).concat(comments[activeItem.gid] || [])).map((c, i) => (
+                  <div key={c.id || i} style={{ marginBottom: 18, display: 'flex', gap: 12, background: 'rgba(255,255,255,0.02)', padding: 14, borderRadius: 12, border: '1px solid rgba(255,255,255,0.03)' }}>
+                    <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'rgba(255,215,0,0.1)', border: '1px solid rgba(255,215,0,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFD700', fontFamily: "'Cinzel', serif", fontSize: 15, flexShrink: 0 }}>{(c.user || 'A')[0]}</div>
+                    <div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: '#FFF', fontFamily: "'Jost', sans-serif" }}>{c.user}</div>
+                        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', fontFamily: "'Jost', sans-serif" }}>{c.time || (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '')}</div>
+                      </div>
+                      <div style={{ fontSize: 14, fontFamily: "'Cormorant Garamond', serif", color: 'rgba(255,255,255,0.85)', lineHeight: 1.5, fontStyle: 'italic' }}>{c.text || c.content}</div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <div style={{ padding: '12px 16px', background: 'rgba(0,0,0,0.6)', display: 'flex', gap: 10, paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))', flexShrink: 0 }}>
+              <input
+                value={commentInput}
+                onChange={e => setCommentInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && postComment(activeItem.gid)}
+                placeholder="Share your admiration..."
+                style={{ flex: 1, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: 24, padding: '12px 16px', color: '#fff', outline: 'none', fontFamily: "'Jost', sans-serif", fontSize: 14 }}
+              />
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={() => postComment(activeItem.gid)}
+                style={{ background: '#FFD700', color: '#000', border: 'none', borderRadius: 24, padding: '0 18px', fontWeight: 700, cursor: 'pointer', fontFamily: "'Jost', sans-serif", fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase', flexShrink: 0, touchAction: 'manipulation' }}
+              >Post</motion.button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* BOTTOM NAVIGATION — position:fixed, always visible on masonry + immersive */}
+      <motion.div
+        initial={{ y: 100 }} animate={{ y: 0 }}
+        transition={{ type: 'spring', damping: 22, stiffness: 120, delay: 0.15 }}
+        style={{
+          position: 'fixed',
+          bottom: 0, left: 0, right: 0,
+          zIndex: 150,
+          background: 'linear-gradient(to top, rgba(4,3,2,0.99) 0%, rgba(8,6,4,0.92) 100%)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          borderTop: '1px solid rgba(255,215,0,0.1)',
+          display: 'flex',
+          justifyContent: 'space-evenly',
+          alignItems: 'center',
+          // Dynamic height: nav content + safe area
+          paddingBottom: 'env(safe-area-inset-bottom, 0px)',
+          paddingTop: 8,
+          paddingLeft: 4,
+          paddingRight: 4,
+          minHeight: 64,
+        }}
+      >
+        {[
+          {
+            l: 'Home',
+            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
+            action: () => navigate('/'),
+          },
+          {
+            l: 'Search',
+            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
+            action: () => setIsSearchOpen(true),
+          },
+          null, // centre slot = Enquire pill
+          {
+            l: 'Saved',
+            icon: <IconBookmark filled={false}/>,
+            action: () => setShowProfile(true),
+          },
+          {
+            l: 'Profile',
+            icon: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
+            action: () => setShowProfile(true),
+          },
+        ].map((btn, i) => {
+          if (btn === null) {
+            // Central Enquire pill — lifted above nav bar
+            return (
+              <motion.button
+                key="enquire"
+                whileTap={{ scale: 0.94 }}
+                onClick={() => setShowCommissionModal(true)}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(255,215,0,0.95) 0%, rgba(195,148,0,1) 100%)',
+                  border: 'none',
+                  borderRadius: 32,
+                  height: 46,
+                  padding: '0 18px',
+                  color: '#000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 7,
+                  cursor: 'pointer',
+                  fontWeight: 800,
+                  fontFamily: "'Jost', sans-serif",
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.08em',
+                  fontSize: 11,
+                  boxShadow: '0 4px 20px rgba(255,215,0,0.35), 0 2px 8px rgba(0,0,0,0.6)',
+                  transform: 'translateY(-12px)',
+                  touchAction: 'manipulation',
+                  flexShrink: 0,
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>Enquire</span>
+              </motion.button>
+            );
+          }
+          return (
+            <motion.button
+              key={btn.l}
+              whileTap={{ scale: 0.88 }}
+              onClick={btn.action}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'rgba(255,255,255,0.55)',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 3,
+                cursor: 'pointer',
+                padding: '6px 8px',
+                minWidth: 44,
+                minHeight: 44,
+                touchAction: 'manipulation',
+                transition: 'color 0.2s',
+              }}
+              onTouchStart={e => e.currentTarget.style.color = '#FFD700'}
+              onTouchEnd={e => e.currentTarget.style.color = 'rgba(255,255,255,0.55)'}
+            >
+              {btn.icon}
+              <span style={{ fontFamily: "'Jost', sans-serif", fontSize: 9, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase' }}>{btn.l}</span>
+            </motion.button>
+          );
+        })}
+      </motion.div>
+
+      {/* MODALS */}
+      <AnimatePresence>
+        {showProfile && <ProfileModal onClose={() => setShowProfile(false)} C={C} />}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+const GalleryPage = ({ scrolled }) => {
+  const location = useLocation();
+  const initialId = location.state?.activeId;
+
+  // Scroll to top only when entering masonry view (no specific image selected)
+  useEffect(() => {
+    if (!initialId) window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [initialId]);
+
+  // ImmersiveFeed is self-contained: shows masonry or immersive viewer
+  // based on location.state.activeId — no Nav/Footer needed
+  return <ImmersiveFeed />;
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   PROFILE MODAL - INSTAGRAM / LUXURY PORTFOLIO STYLE
+═══════════════════════════════════════════════════════════════ */
+const ProfileModal = ({ onClose, C }) => {
+  const { user, setIsLoggedIn, setUser, setShowAuthModal } = useAppCtx();
+  const [activeTab, setActiveTab] = useState('Saved');
+  const tabs = ['Saved', 'Liked', 'Collections'];
+  
+  const isGuest = !user;
+  const username = user?.email?.split('@')[0] || 'Guest Collector';
+  const avatar = user?.user_metadata?.avatar_url || (isGuest ? '/gallery/gold/crown.jpg' : `https://ui-avatars.com/api/?name=${username}&background=random&color=fff`);
+
+  return (
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      style={{position:'fixed',inset:0,zIndex:3000,background:'rgba(0,0,0,0.92)',backdropFilter:'blur(24px)',display:'flex',justifyContent:'center',alignItems:'center',padding:20}}
+      onClick={onClose}>
+      <motion.div initial={{scale:0.97,y:20,opacity:0}} animate={{scale:1,y:0,opacity:1}} exit={{scale:0.97,y:10,opacity:0}}
+        onClick={e=>e.stopPropagation()}
+        style={{width:'100%',maxWidth:800,maxHeight:'90vh',display:'flex',flexDirection:'column',background:C.bg1,border:`1px solid ${C.border}`,borderRadius:24,overflow:'hidden',boxShadow:'0 32px 80px rgba(0,0,0,0.8)'}}>
+        
+        {/* Profile Header */}
+        <div style={{padding:'40px 48px',display:'flex',alignItems:'center',gap:32,borderBottom:`1px solid ${C.border}`,position:'relative', flexWrap:'wrap'}}>
+          <button onClick={onClose} style={{position:'absolute',top:24,right:24,background:'none',border:'none',color:C.dim,fontSize:24,cursor:'pointer'}}>×</button>
+          
+          <div style={{position:'relative',width:110,height:110,flexShrink:0}}>
+            <div style={{position:'absolute',inset:-4,borderRadius:'50%',background:C.goldGrad,animation:'starBorderSpin 8s linear infinite'}}/>
+            <div style={{position:'absolute',inset:0,borderRadius:'50%',background:C.bg1,display:'flex',alignItems:'center',justifyContent:'center',fontSize:44,border:`4px solid ${C.bg1}`}}>
+              <img src={avatar} style={{width:'100%',height:'100%',borderRadius:'50%',objectFit:'cover'}} alt="Avatar" />
+            </div>
+          </div>
+          
+          <div style={{flex:1, minWidth:200}}>
+            <div style={{display:'flex',alignItems:'center',gap:16,marginBottom:12, flexWrap:'wrap'}}>
+              <h2 style={{...ff.display,fontSize:28,color:C.text,margin:0}}>{username}</h2>
+              <button style={{padding:'6px 16px',background:'transparent',border:`1px solid ${C.borderHi}`,color:C.text,borderRadius:4,...ff.body,fontSize:12,fontWeight:600,cursor:'pointer'}} onClick={() => { if(isGuest) { setShowAuthModal(true); onClose(); } }}>{isGuest ? 'Sign In' : 'Edit Profile'}</button>
+              {!isGuest && <button style={{padding:'6px 16px',background:'transparent',border:'1px solid rgba(255,80,80,0.4)',color:'rgba(255,100,100,0.9)',borderRadius:4,...ff.body,fontSize:12,fontWeight:600,cursor:'pointer'}} onClick={() => { localStorage.removeItem('vmw_session'); setIsLoggedIn(false); setUser(null); onClose(); }}>Sign Out</button>}
+            </div>
+            
+            <div style={{display:'flex',gap:24,marginBottom:16,...ff.body,fontSize:14}}>
+              {(() => {
+                const us = getUserState();
+                const likedCount = Object.values(us.likes).filter(Boolean).length;
+                const savedCount = Object.values(us.saves).filter(Boolean).length;
+                return (<>
+                  <div><strong style={{color:C.text}}>0</strong> <span style={{color:C.dim}}>posts</span></div>
+                  <div><strong style={{color:C.text}}>{savedCount}</strong> <span style={{color:C.dim}}>saved</span></div>
+                  <div><strong style={{color:C.text}}>{likedCount}</strong> <span style={{color:C.dim}}>liked</span></div>
+                </>);
+              })()}
+            </div>
+            
+            <div style={{...ff.body,fontSize:14,color:C.text}}>
+              <div style={{fontWeight:600,marginBottom:2}}>Sacred Art Enthusiast</div>
+              <div style={{color:C.dim,maxWidth:300}}>Curating fine handcrafted temple metalworks. Chennai, India.</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div style={{display:'flex',justifyContent:'center',borderBottom:`1px solid ${C.border}`,gap:48}}>
+          {tabs.map((tab)=>(
+            <div key={tab} onClick={() => setActiveTab(tab)}
+              style={{padding:'16px 0',...ff.body,fontSize:12,letterSpacing:'.1em',textTransform:'uppercase',fontWeight:activeTab===tab?700:500,color:activeTab===tab?C.gold:C.dim,borderTop:activeTab===tab?`1px solid ${C.gold}`:'1px solid transparent',cursor:'pointer',position:'relative',top:-1}}>
+              {tab}
+            </div>
+          ))}
+        </div>
+
+        {/* Content Area */}
+        <div style={{flex:1,overflowY:'auto',padding:24,background:C.bg2,minHeight:300}}>
+          {(() => {
+            const userState = getUserState();
+            const likedGids = Object.entries(userState.likes).filter(([,v])=>v).map(([k])=>k);
+            const savedGids = Object.entries(userState.saves).filter(([,v])=>v).map(([k])=>k);
+            
+            let displayItems = [];
+            if (activeTab === 'Liked') {
+              displayItems = GALLERY_IDOLS.filter(i => likedGids.includes(i.gid));
+            } else if (activeTab === 'Saved') {
+              displayItems = GALLERY_IDOLS.filter(i => savedGids.includes(i.gid));
+            }
+
+            if (displayItems.length === 0) {
+              return (
+                <div style={{textAlign:'center',padding:'60px 0',color:C.faint,...ff.serif,fontSize:18,fontStyle:'italic'}}>
+                  {activeTab === 'Liked' ? 'No liked pieces yet. Tap ❤️ on any gallery item.' : activeTab === 'Saved' ? 'No saved pieces yet. Sign in and tap 📌 to save.' : 'Collections coming soon.'}
+                </div>
+              );
+            }
+
+            return (
+              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))',gap:8}}>
+                {displayItems.map(idol => (
+                  <div key={idol.gid} style={{aspectRatio:'1/1',overflow:'hidden',borderRadius:8,border:`1px solid ${C.border}`,position:'relative',cursor:'pointer'}}>
+                    <img src={idol.img} alt={idol.deity} style={{width:'100%',height:'100%',objectFit:'cover',filter:'sepia(8%)'}}/>
+                    <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(0,0,0,0.7) 0%,transparent 50%)',display:'flex',alignItems:'flex-end',padding:'10px 12px'}}>
+                      <div style={{...ff.body,fontSize:11,color:'#fff',fontWeight:600,lineHeight:1.3}}>{idol.deity}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   COMMISSION MODAL
+═══════════════════════════════════════════════════════════════ */
+const CommissionModal = ({ onClose, C }) => {
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(false);
+  
+  const submit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+    
+    try {
+      const formData = new FormData(e.target);
+      const data = Object.fromEntries(formData.entries());
+      const files = e.target.querySelector('input[type="file"]').files;
+      
+      const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+      const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+      
+      let imageUrls = [];
+      
+      // If we have Supabase configured, do the real upload
+      if (supabaseUrl && supabaseKey) {
+        // Upload images to inquiry_references bucket
+        for (let i = 0; i < files.length; i++) {
+          const file = files[i];
+          const fileExt = file.name.split('.').pop();
+          const fileName = `${Date.now()}_${i}.${fileExt}`;
+          const res = await fetch(`${supabaseUrl}/storage/v1/object/inquiry_references/${fileName}`, {
+            method: 'POST',
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': file.type
+            },
+            body: file
+          });
+          if (res.ok) {
+            imageUrls.push(fileName);
+          }
+        }
+        
+        // Insert record into inquiries
+        const payload = {
+          full_name: data.fullName || '',
+          phone: data.phone || '',
+          email: data.email || '',
+          whatsapp: data.whatsapp || data.phone || '',
+        };
+
+        // Safely add extra fields as a JSON note if the columns don't exist
+        // (safe fallback: store extras in a note/description column if present)
+        const extraInfo = [
+          data.artworkType ? `Type: ${data.artworkType}` : '',
+          data.metal ? `Metal: ${data.metal}` : '',
+          data.budget ? `Budget: ${data.budget}` : '',
+          data.timeline ? `Timeline: ${data.timeline}` : '',
+          data.description || '',
+        ].filter(Boolean).join('\n');
+
+        // Try inserting with all fields first, fall back to minimal if it fails
+        let insertPayload = { ...payload };
+        // Add optional columns only if your schema has them:
+        if (data.artworkType) insertPayload.artwork_type = data.artworkType;
+        if (data.metal) insertPayload.preferred_metal = data.metal;
+        if (data.budget) insertPayload.budget = data.budget;
+        if (data.timeline) insertPayload.timeline = data.timeline;
+        if (data.description) insertPayload.description = data.description;
+        if (imageUrls.length > 0) insertPayload.reference_images = imageUrls;
+        insertPayload.status = 'pending';
+        insertPayload.notes = extraInfo;
+
+        const insertRes = await fetch(`${supabaseUrl}/rest/v1/inquiries`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'return=minimal'
+          },
+          body: JSON.stringify(insertPayload)
+        });
+        if (!insertRes.ok) {
+          // Try minimal payload if extended failed (column mismatch)
+          const errText = await insertRes.text();
+          console.warn('Full insert failed, trying minimal payload:', errText);
+          const minimalRes = await fetch(`${supabaseUrl}/rest/v1/inquiries`, {
+            method: 'POST',
+            headers: {
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`,
+              'Content-Type': 'application/json',
+              'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(payload)
+          });
+          if (!minimalRes.ok) {
+            const minErrText = await minimalRes.text();
+            throw new Error(`Submission failed: ${minErrText}`);
+          }
+        }
+      } else {
+        // Simulate network request if env vars not set yet
+        await new Promise(r => setTimeout(r, 1500));
+        console.log("Mock Supabase Submit", data, files);
+      }
+      
+      setSubmitting(false);
+      setDone(true);
+    } catch (err) {
+      console.error(err);
+      setSubmitting(false);
+      alert("Submission failed. Please try again.");
+    }
+  };
+
+  return (
+    <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
+      style={{position:'fixed',inset:0,zIndex:3000,background:'rgba(0,0,0,0.85)',backdropFilter:'blur(20px)',display:'flex',justifyContent:'center',alignItems:'center',padding:20}}
+      onClick={onClose}>
+      <motion.div initial={{scale:0.95,y:20}} animate={{scale:1,y:0}} exit={{scale:0.95,y:20}}
+        onClick={e=>e.stopPropagation()}
+        style={{width:'100%',maxWidth:650,maxHeight:'90vh',overflowY:'auto',background:C.bg1,border:`1px solid ${C.border}`,borderRadius:24,boxShadow:'0 24px 60px rgba(0,0,0,0.8)'}}>
+        
+        {!done ? (
+          <>
+            <div style={{padding:'32px 32px 20px',borderBottom:`1px solid ${C.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <h2 style={{...ff.display,fontSize:24,color:C.gold,margin:0}}>Commission Request</h2>
+                <p style={{...ff.body,fontSize:14,color:C.dim,margin:'4px 0 0'}}>Begin your sacred project with us.</p>
+              </div>
+              <button onClick={onClose} style={{background:'none',border:'none',color:C.dim,fontSize:24,cursor:'pointer'}}>×</button>
+            </div>
+            <form onSubmit={submit} style={{padding:32,display:'flex',flexDirection:'column',gap:20}}>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+                <input name="fullName" required placeholder="Full Name" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+                <input name="phone" required placeholder="Phone Number" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+                <input name="email" required type="email" placeholder="Email Address" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+                <input name="whatsapp" placeholder="WhatsApp Number (Optional)" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+                <select name="artworkType" required style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14,appearance:'none'}}>
+                  <option value="" disabled selected>Artwork Type</option>
+                  <option value="idol">Idol / Vigraham</option>
+                  <option value="crown">Crown / Kireedam</option>
+                  <option value="prabhavali">Prabhavali</option>
+                  <option value="other">Other</option>
+                </select>
+                <select name="metal" required style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14,appearance:'none'}}>
+                  <option value="" disabled selected>Preferred Metal</option>
+                  <option value="gold">24K Gold</option>
+                  <option value="silver">Silver</option>
+                  <option value="panchaloha">Panchaloha</option>
+                  <option value="brass">Brass</option>
+                </select>
+                <input name="budget" placeholder="Budget Estimate" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+                <input name="timeline" placeholder="Expected Timeline (e.g., 3 months)" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+              </div>
+              <textarea name="description" required placeholder="Project Description & Temple Details (Dimensions, specifications, history)..." rows={4} style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14,resize:'vertical'}}/>
+              
+              <div style={{display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:C.isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)', border:`1px dashed ${C.border}`, borderRadius:8}}>
+                <div style={{fontSize:20}}>📎</div>
+                <div style={{flex:1}}>
+                  <div style={{...ff.body, fontSize:13, color:C.text, fontWeight:600}}>Attach Reference Images</div>
+                  <div style={{...ff.body, fontSize:11, color:C.dim}}>Upload sketches or existing idols (Max 3 files)</div>
+                </div>
+                <input type="file" multiple accept="image/*" style={{width:100, fontSize:11, color:C.dim}}/>
+              </div>
+              
+              <button type="submit" disabled={submitting}
+                style={{marginTop:10,padding:'16px',background:C.goldGrad,color:'#000',border:'none',borderRadius:8,...ff.body,fontSize:14,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',cursor:submitting?'not-allowed':'pointer'}}>
+                {submitting ? 'Connecting to Supabase...' : 'Submit Commission Request'}
+              </button>
+            </form>
+          </>
+        ) : (
+          <div style={{padding:60,textAlign:'center'}}>
+            <motion.div initial={{scale:0}} animate={{scale:1, rotate:360}} transition={{type:'spring', stiffness:200, damping:20}} style={{fontSize:60,marginBottom:20}}>✨</motion.div>
+            <h2 style={{...ff.display,fontSize:28,color:C.gold,margin:'0 0 16px 0'}}>Commission Received</h2>
+            <p style={{...ff.body,fontSize:16,color:C.dim,lineHeight:1.6}}>Our master craftsmen will review your sacred project and contact you shortly.</p>
+            <div style={{display:'flex',gap:16,justifyContent:'center',marginTop:32}}>
+              <button onClick={onClose} style={{padding:'14px 32px',background:C.goldGrad,border:'none',color:'#000',borderRadius:30,...ff.body,fontSize:12,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',cursor:'pointer'}}>Close Window</button>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </motion.div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   AUTH MODAL
+═══════════════════════════════════════════════════════════════ */
+const AuthModal = ({ onClose, action }) => {
+  const { setIsLoggedIn, setUser } = useAppCtx();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLogin, setIsLogin] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if(!email || !password) return;
+    
+    setLoading(true);
+    setError('');
+    
+    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+    const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+    
+    if(supabaseUrl && supabaseKey) {
+      try {
+        const endpoint = isLogin ? '/auth/v1/token?grant_type=password' : '/auth/v1/signup';
+        const res = await fetch(`${supabaseUrl}${endpoint}`, {
+          method: 'POST',
+          headers: { 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        
+        if(!res.ok) throw new Error(data.error_description || data.msg || 'Authentication failed');
+        
+        localStorage.setItem('vmw_session', JSON.stringify(data));
+        setIsLoggedIn(true);
+        if(setUser) setUser(data.user);
+        onClose();
+      } catch(err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    } else {
+      // Mock fallback
+      setTimeout(() => {
+        setIsLoggedIn(true);
+        onClose();
+      }, 1000);
+    }
+  };
+  
+  return (
+    <motion.div
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+      style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(30px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      onClick={onClose}
+    >
+      <motion.div
+        initial={{ scale: 0.95, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.98, opacity: 0, y: 15 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        onClick={e => e.stopPropagation()}
+        style={{ width: 'min(400px, 100vw)', border: '1px solid rgba(255,215,0,0.2)', background: 'linear-gradient(180deg, rgba(20,16,10,0.98) 0%, rgba(10,8,6,0.98) 100%)', borderRadius: 24, overflow: 'hidden', boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }}
+      >
+        <div style={{ padding: '40px 32px 20px', textAlign: 'center', position: 'relative' }}>
+          <button onClick={onClose} style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.05)', border: 'none', color: 'rgba(255,255,255,0.6)', width: 32, height: 32, borderRadius: '50%', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          <div style={{ fontSize: 42, marginBottom: 16, filter: 'drop-shadow(0 0 12px rgba(255,215,0,0.4))' }}>✨</div>
+          <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 24, color: 'rgba(255,215,0,0.95)', margin: '0 0 8px 0', letterSpacing: '0.05em' }}>
+            {isLogin ? 'Sign In' : 'Create Account'}
+          </h3>
+          <p style={{ fontFamily: "'Jost', sans-serif", fontSize: 14, color: 'rgba(255,255,255,0.5)', margin: 0, lineHeight: 1.5 }}>
+            {isLogin ? 'Welcome back to the archive.' : 'Join to curate your personal collection.'}
+          </p>
+        </div>
+        <div style={{ padding: '0 32px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {error && <div style={{ color: '#ff4444', fontSize: 13, textAlign: 'center' }}>{error}</div>}
+            <input type="email" required placeholder="Email Address" value={email} onChange={e=>setEmail(e.target.value)} style={{ width: '100%', padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontFamily: "'Jost', sans-serif", fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+            <input type="password" required placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} style={{ width: '100%', padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontFamily: "'Jost', sans-serif", fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+            <motion.button disabled={loading} whileHover={loading ? {} : { scale: 1.02 }} whileTap={loading ? {} : { scale: 0.98 }} type="submit" style={{ width: '100%', padding: '16px 24px', background: loading ? 'rgba(255,215,0,0.5)' : 'linear-gradient(135deg, rgba(255,215,0,0.9) 0%, rgba(200,150,0,1) 100%)', color: '#000', border: 'none', borderRadius: 12, fontFamily: "'Jost', sans-serif", fontSize: 14, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', marginTop: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+              {loading ? 'Authenticating...' : (isLogin ? 'Sign In' : 'Create Account')}
+            </motion.button>
+          </form>
+          
+          <div style={{ textAlign: 'center', fontSize: 12, fontFamily: "'Jost', sans-serif", color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }} onClick={() => setIsLogin(!isLogin)}>
+            {isLogin ? "Don't have an account? Sign Up" : "Already have an account? Sign In"}
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', margin: '4px 0', opacity: 0.3 }}>
+            <div style={{ flex: 1, height: 1, background: '#FFF' }}></div>
+            <div style={{ padding: '0 16px', fontSize: 12, fontFamily: "'Jost', sans-serif", textTransform: 'uppercase', letterSpacing: '0.1em' }}>OR</div>
+            <div style={{ flex: 1, height: 1, background: '#FFF' }}></div>
+          </div>
+
+          <motion.button 
+            whileHover={{ scale: 1.02, background: 'rgba(255,255,255,0.9)' }} whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+              const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+              if (!supabaseUrl || !supabaseKey) {
+                alert('Supabase is not configured. Add env vars to enable Google sign-in.');
+                return;
+              }
+              // Redirect to Supabase Google OAuth — user comes back to /gallery after auth
+              const redirectTo = encodeURIComponent(window.location.origin + '/gallery');
+              window.location.href = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
+            }}
+            style={{ width: '100%', padding: '14px 24px', background: 'rgba(255,255,255,0.92)', color: '#333', border: 'none', borderRadius: 12, fontFamily: "'Jost', sans-serif", fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+            Continue with Google
+          </motion.button>
+          
+          <motion.button 
+            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={() => { setIsLoggedIn(false); onClose(); }}
+            style={{ width: '100%', padding: '14px 24px', background: 'transparent', color: 'rgba(255,215,0,0.8)', border: '1px dashed rgba(255,215,0,0.3)', borderRadius: 12, fontFamily: "'Jost', sans-serif", fontSize: 14, fontWeight: 600, cursor: 'pointer', transition: 'all 0.3s' }}
+          >
+            Continue as Guest
+          </motion.button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN DASHBOARD
+═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN LOGIN
+═══════════════════════════════════════════════════════════════ */
+const AdminLogin = () => {
+  const C = useTheme();
+  const navigate = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+    const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+    if (!supabaseUrl || !supabaseKey) {
+      setError('Authentication service is not configured. Please set REACT_APP_SUPABASE_URL and REACT_APP_SUPABASE_ANON_KEY in your .env.local file.');
+      setLoading(false);
+      return;
+    }
+
+    try {
+      const res = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=password`, {
+        method: 'POST',
+        headers: { 'apikey': supabaseKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error_description || data.msg || 'Authentication failed');
+
+      // Check role via profiles table
+      const profileRes = await fetch(`${supabaseUrl}/rest/v1/profiles?id=eq.${data.user.id}&select=role`, {
+        headers: { 'apikey': supabaseKey, 'Authorization': `Bearer ${data.access_token}` }
+      });
+      const profiles = await profileRes.json();
+      const role = profiles?.[0]?.role;
+      if (role !== 'admin') throw new Error('You do not have admin access. Ask the owner to grant your account the admin role.');
+
+      localStorage.setItem('vmw_session', JSON.stringify(data));
+      localStorage.setItem('vmw_admin_auth', 'true');
+      navigate('/admin');
+    } catch(err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: C.bg1 }}>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ width: '100%', maxWidth: 400, background: C.surfaceWarm, border: `1px solid ${C.border}`, borderRadius: 24, padding: 40, boxShadow: '0 32px 80px rgba(0,0,0,0.8)' }}>
+        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+          <div style={{ fontSize: 40, marginBottom: 16 }}>🔒</div>
+          <h1 style={{ fontFamily: "'Cinzel', serif", color: C.gold, fontSize: 24, margin: '0 0 8px 0' }}>Admin Gateway</h1>
+          <p style={{ fontFamily: "'Jost', sans-serif", color: C.dim, fontSize: 14, margin: 0 }}>Secure access for authorized personnel only.</p>
+        </div>
+        <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {error && <div style={{ color: '#ff4444', fontSize: 13, textAlign: 'center' }}>{error}</div>}
+          <input type="email" required placeholder="Admin Email" value={email} onChange={e=>setEmail(e.target.value)} style={{ padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, fontFamily: "'Jost', sans-serif" }}/>
+          <input type="password" required placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} style={{ padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: `1px solid ${C.border}`, borderRadius: 12, color: C.text, fontFamily: "'Jost', sans-serif" }}/>
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} type="submit" disabled={loading} style={{ padding: '16px', background: loading ? 'rgba(255,215,0,0.5)' : C.gold, color: '#000', border: 'none', borderRadius: 12, fontFamily: "'Jost', sans-serif", fontWeight: 700, marginTop: 8, cursor: loading ? 'not-allowed' : 'pointer', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            {loading ? 'Authenticating...' : 'Authenticate'}
+          </motion.button>
+        </form>
+      </motion.div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN DASHBOARD
+═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN GALLERY MANAGER — Upload, manage, delete gallery items
+   Images uploaded to Supabase Storage → public URL → inserted
+   into gallery_items table → live on website instantly.
+═══════════════════════════════════════════════════════════════ */
+const GALLERY_CATS = ['Gold Work', 'Silver Work', 'Stone Work', 'Vigraham', 'Crown Work'];
+const METAL_OPTIONS = ['24K Gold Nagas', 'Gold Nagas Handcrafted', '24K Gold Polish', 'Gold Beaten Work', 'Gold Plated Copper', 'Sterling Silver', 'Stone · Gold Inlay', 'Stone Setting', 'Panchaloha Cast', 'Custom'];
+
+const AdminGalleryManager = ({ C, supabaseUrl, supabaseKey, onRefreshStats }) => {
+  const [items, setItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [form, setForm] = useState({
+    title: '', category: 'Gold Work', metal_type: '24K Gold Nagas',
+    is_featured: false, file: null, preview: null,
+  });
+  const fileRef = React.useRef();
+
+  const showToast = (msg, ok = true) => {
+    setToast({ msg, ok });
+    setTimeout(() => setToast(null), 3500);
+  };
+
+  const getAuthHeaders = () => {
+    let token = supabaseKey;
+    try { const s = localStorage.getItem('vmw_session'); if(s){const p=JSON.parse(s);if(p?.access_token)token=p.access_token;} } catch(_){}
+    return { 'apikey': supabaseKey, 'Authorization': `Bearer ${token}` };
+  };
+
+  const fetchItems = useCallback(async () => {
+    if (!supabaseUrl || !supabaseKey) { setLoading(false); return; }
+    try {
+      setLoading(true);
+      const res = await fetch(`${supabaseUrl}/rest/v1/gallery_items?select=*&order=created_at.desc`, {
+        headers: getAuthHeaders()
+      });
+      const data = res.ok ? await res.json() : [];
+      setItems(data);
+    } catch(e) { console.error(e); }
+    finally { setLoading(false); }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabaseUrl, supabaseKey]);
+
+  useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    // Revoke previous preview URL to prevent memory leak
+    setForm(f => {
+      if (f.preview) URL.revokeObjectURL(f.preview);
+      return { ...f, file, preview: URL.createObjectURL(file) };
+    });
+  };
+
+  const handleUpload = async () => {
+    if (!form.file || !form.title.trim()) { showToast('Please fill title and select an image.', false); return; }
+    if (!supabaseUrl || !supabaseKey) { showToast('Supabase not configured.', false); return; }
+
+    setUploading(true);
+    setUploadProgress(10);
+
+    try {
+      // Step 1: Insert metadata — DO NOT send `id`, let Postgres auto-generate UUID
+      const insertRes = await fetch(`${supabaseUrl}/rest/v1/gallery_items`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+        body: JSON.stringify({
+          title: form.title.trim(),
+          category: form.category,
+          metal_type: form.metal_type,
+          is_featured: form.is_featured,
+          image_url: '', // placeholder — updated after upload
+        }),
+      });
+      if (!insertRes.ok) throw new Error(`DB insert failed: ${await insertRes.text()}`);
+      const [newRow] = await insertRes.json();
+      const uuid = newRow.id; // real UUID from gen_random_uuid()
+      setUploadProgress(35);
+
+      // Step 2: Upload image using real UUID as path (no collision risk)
+      const ext = form.file.name.split('.').pop().toLowerCase();
+      const storagePath = `gallery/${uuid}.${ext}`;
+      const uploadRes = await fetch(`${supabaseUrl}/storage/v1/object/gallery-images/${storagePath}`, {
+        method: 'POST',
+        headers: { ...getAuthHeaders(), 'Content-Type': form.file.type, 'x-upsert': 'true' },
+        body: form.file,
+      });
+      if (!uploadRes.ok) {
+        // Roll back DB row if storage fails
+        await fetch(`${supabaseUrl}/rest/v1/gallery_items?id=eq.${uuid}`, { method: 'DELETE', headers: getAuthHeaders() });
+        throw new Error(`Image upload failed: ${await uploadRes.text()}`);
+      }
+      setUploadProgress(75);
+
+      // Step 3: Update row with real public URL
+      const publicUrl = `${supabaseUrl}/storage/v1/object/public/gallery-images/${storagePath}`;
+      const updateRes = await fetch(`${supabaseUrl}/rest/v1/gallery_items?id=eq.${uuid}`, {
+        method: 'PATCH',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ image_url: publicUrl }),
+      });
+      if (!updateRes.ok) throw new Error(`URL update failed: ${await updateRes.text()}`);
+
+      setUploadProgress(100);
+      showToast(`"${form.title}" uploaded and live on website! ✓`);
+
+      if (form.preview) URL.revokeObjectURL(form.preview);
+      setForm({ title: '', category: 'Gold Work', metal_type: '24K Gold Nagas', is_featured: false, file: null, preview: null });
+      if (fileRef.current) fileRef.current.value = '';
+      setShowUploadForm(false);
+      await fetchItems();
+      if (onRefreshStats) onRefreshStats();
+    } catch(err) {
+      showToast(err.message, false);
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleToggleFeatured = async (item) => {
+    try {
+      const res = await fetch(`${supabaseUrl}/rest/v1/gallery_items?id=eq.${item.id}`, {
+        method: 'PATCH',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_featured: !item.is_featured }),
+      });
+      if (!res.ok) throw new Error('Failed to update');
+      showToast(`${item.title} ${!item.is_featured ? 'featured' : 'unfeatured'}`);
+      await fetchItems();
+    } catch(e) { showToast(e.message, false); }
+  };
+
+  const handleDelete = async (item) => {
+    try {
+      // Delete from DB
+      const res = await fetch(`${supabaseUrl}/rest/v1/gallery_items?id=eq.${item.id}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      if (!res.ok) throw new Error('DB delete failed');
+
+      // Try delete from storage if it's an upload (not seeded)
+      if (item.image_url && item.image_url.includes('/storage/v1/object/public/gallery-images/')) {
+        const path = item.image_url.split('/storage/v1/object/public/gallery-images/')[1];
+        await fetch(`${supabaseUrl}/storage/v1/object/gallery-images/${path}`, {
+          method: 'DELETE', headers: getAuthHeaders(),
+        });
+      }
+      showToast(`"${item.title}" deleted.`);
+      setDeleteConfirm(null);
+      await fetchItems();
+      if (onRefreshStats) onRefreshStats();
+    } catch(e) { showToast(e.message, false); }
+  };
+
+  const inp = (label, value, onChange, type='text', placeholder='') => (
+    <label style={{ display:'flex', flexDirection:'column', gap:6 }}>
+      <span style={{ fontSize:12, textTransform:'uppercase', letterSpacing:'.08em', color:C.dim, fontFamily:"'Jost',sans-serif" }}>{label}</span>
+      <input type={type} value={value} onChange={e=>onChange(e.target.value)} placeholder={placeholder}
+        style={{ padding:'12px 14px', background:'rgba(255,255,255,0.06)', border:`1px solid ${C.border}`, borderRadius:10, color:C.text, fontSize:14, outline:'none', fontFamily:"'Jost',sans-serif" }} />
+    </label>
+  );
+
+  return (
+    <div style={{ position:'relative' }}>
+      {/* Toast */}
+      {toast && (
+        <div style={{ position:'fixed', top:24, right:24, zIndex:9999, padding:'14px 22px', background: toast.ok ? 'rgba(0,200,100,0.95)' : 'rgba(220,50,50,0.95)', color:'#fff', borderRadius:12, fontFamily:"'Jost',sans-serif", fontSize:14, fontWeight:600, boxShadow:'0 8px 24px rgba(0,0,0,0.4)', maxWidth:360 }}>
+          {toast.msg}
+        </div>
+      )}
+
+      {/* Header */}
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:28, flexWrap:'wrap', gap:12 }}>
+        <div>
+          <h3 style={{ fontFamily:"'Cinzel',serif", fontSize:24, margin:0, color:C.text }}>Gallery Management</h3>
+          <p style={{ fontFamily:"'Jost',sans-serif", fontSize:13, color:C.dim, margin:'4px 0 0' }}>{items.length} items in gallery · Uploads reflect instantly on the website</p>
+        </div>
+        <button onClick={() => setShowUploadForm(v => !v)}
+          style={{ background: showUploadForm ? 'rgba(255,215,0,0.15)' : C.gold, color: showUploadForm ? C.gold : '#000', border: showUploadForm ? `1px solid ${C.gold}` : 'none', padding:'12px 24px', borderRadius:10, fontFamily:"'Jost',sans-serif", fontWeight:700, fontSize:14, cursor:'pointer', letterSpacing:'.04em' }}>
+          {showUploadForm ? '✕ Cancel' : '+ Upload New Artwork'}
+        </button>
+      </div>
+
+      {/* Upload Form */}
+      {showUploadForm && (
+        <div style={{ background:C.surfaceWarm, border:`1px solid ${C.gold}44`, borderRadius:16, padding:32, marginBottom:32 }}>
+          <h4 style={{ fontFamily:"'Cinzel',serif", fontSize:18, color:C.gold, margin:'0 0 24px' }}>Upload New Gallery Item</h4>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:20, marginBottom:20 }}>
+            {inp('Artwork Title *', form.title, v => setForm(f=>({...f,title:v})), 'text', 'e.g. Sadari Gold Crown')}
+            <label style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              <span style={{ fontSize:12, textTransform:'uppercase', letterSpacing:'.08em', color:C.dim, fontFamily:"'Jost',sans-serif" }}>Category</span>
+              <select value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}
+                style={{ padding:'12px 14px', background:'rgba(255,255,255,0.06)', border:`1px solid ${C.border}`, borderRadius:10, color:C.text, fontSize:14, fontFamily:"'Jost',sans-serif", outline:'none' }}>
+                {GALLERY_CATS.map(c=><option key={c} value={c} style={{background:'#111'}}>{c}</option>)}
+              </select>
+            </label>
+            <label style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              <span style={{ fontSize:12, textTransform:'uppercase', letterSpacing:'.08em', color:C.dim, fontFamily:"'Jost',sans-serif" }}>Metal Type</span>
+              <select value={form.metal_type} onChange={e=>setForm(f=>({...f,metal_type:e.target.value}))}
+                style={{ padding:'12px 14px', background:'rgba(255,255,255,0.06)', border:`1px solid ${C.border}`, borderRadius:10, color:C.text, fontSize:14, fontFamily:"'Jost',sans-serif", outline:'none' }}>
+                {METAL_OPTIONS.map(m=><option key={m} value={m} style={{background:'#111'}}>{m}</option>)}
+              </select>
+            </label>
+            <label style={{ display:'flex', flexDirection:'column', gap:6 }}>
+              <span style={{ fontSize:12, textTransform:'uppercase', letterSpacing:'.08em', color:C.dim, fontFamily:"'Jost',sans-serif" }}>Featured on Home Page?</span>
+              <div style={{ display:'flex', alignItems:'center', gap:10, paddingTop:8 }}>
+                <input type="checkbox" checked={form.is_featured} onChange={e=>setForm(f=>({...f,is_featured:e.target.checked}))}
+                  style={{ width:18, height:18, accentColor:C.gold, cursor:'pointer' }} />
+                <span style={{ fontFamily:"'Jost',sans-serif", fontSize:14, color:C.text }}>Show in Featured section</span>
+              </div>
+            </label>
+          </div>
+
+          {/* File Drop Zone */}
+          <label style={{ display:'block', cursor:'pointer' }}>
+            <div style={{
+              border: `2px dashed ${form.preview ? C.gold : C.border}`,
+              borderRadius:14, padding: form.preview ? 0 : '48px 24px',
+              textAlign:'center', background:'rgba(255,255,255,0.02)',
+              transition:'border-color .2s', overflow:'hidden',
+              minHeight: form.preview ? 280 : 'auto',
+              position:'relative',
+            }}>
+              {form.preview ? (
+                <>
+                  <img src={form.preview} alt="Preview" style={{ width:'100%', maxHeight:320, objectFit:'contain', display:'block' }} />
+                  <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0.5)', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', opacity:0, transition:'opacity .2s' }}
+                    onMouseEnter={e=>e.currentTarget.style.opacity=1} onMouseLeave={e=>e.currentTarget.style.opacity=0}>
+                    <span style={{ color:'#fff', fontFamily:"'Jost',sans-serif", fontSize:14 }}>Click to change image</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div style={{ fontSize:40, marginBottom:12 }}>📷</div>
+                  <div style={{ fontFamily:"'Jost',sans-serif", fontSize:15, color:C.text, fontWeight:600, marginBottom:6 }}>Click to select image</div>
+                  <div style={{ fontFamily:"'Jost',sans-serif", fontSize:13, color:C.dim }}>JPG, PNG, WEBP · Max 10MB</div>
+                </>
+              )}
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleFileChange} style={{ display:'none' }} />
+          </label>
+
+          {/* Upload Progress */}
+          {uploading && (
+            <div style={{ marginTop:16 }}>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:6 }}>
+                <span style={{ fontFamily:"'Jost',sans-serif", fontSize:13, color:C.dim }}>Uploading to Supabase Storage…</span>
+                <span style={{ fontFamily:"'Jost',sans-serif", fontSize:13, color:C.gold }}>{uploadProgress}%</span>
+              </div>
+              <div style={{ height:4, background:'rgba(255,255,255,0.1)', borderRadius:99, overflow:'hidden' }}>
+                <div style={{ height:'100%', width:`${uploadProgress}%`, background:C.gold, borderRadius:99, transition:'width .4s ease' }} />
+              </div>
+            </div>
+          )}
+
+          <div style={{ display:'flex', gap:12, marginTop:24 }}>
+            <button onClick={handleUpload} disabled={uploading || !form.file || !form.title.trim()}
+              style={{ flex:1, padding:'14px', background: (uploading || !form.file || !form.title.trim()) ? 'rgba(255,215,0,0.3)' : C.gold, color:'#000', border:'none', borderRadius:10, fontFamily:"'Jost',sans-serif", fontWeight:700, fontSize:14, cursor: (uploading || !form.file || !form.title.trim()) ? 'not-allowed' : 'pointer', letterSpacing:'.06em', textTransform:'uppercase' }}>
+              {uploading ? `Uploading… ${uploadProgress}%` : '⬆ Upload & Publish to Website'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Gallery Grid */}
+      {loading ? (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:16 }}>
+          {[1,2,3,4,5,6].map(i=>(
+            <div key={i} style={{ aspectRatio:'1/1', borderRadius:12, background:'rgba(255,255,255,0.04)' }} className="skeleton" />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <div style={{ background:C.surfaceWarm, border:`1px solid ${C.border}`, borderRadius:16, padding:60, textAlign:'center', color:C.dim, fontFamily:"'Jost',sans-serif" }}>
+          No gallery items yet. Upload your first artwork above.
+        </div>
+      ) : (
+        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:16 }}>
+          {items.map(item => (
+            <div key={item.id} style={{ borderRadius:14, overflow:'hidden', border:`1px solid ${item.is_featured ? C.gold+'66' : C.border}`, background:C.surfaceWarm, position:'relative', display:'flex', flexDirection:'column' }}>
+              {/* Image */}
+              <div style={{ aspectRatio:'1/1', overflow:'hidden', position:'relative' }}>
+                <img src={item.image_url} alt={item.title} style={{ width:'100%', height:'100%', objectFit:'cover' }}
+                  onError={e=>{ e.target.style.background='#1a1208'; e.target.src=''; }} />
+                {item.is_featured && (
+                  <div style={{ position:'absolute', top:8, left:8, background:C.gold, color:'#000', padding:'2px 8px', borderRadius:99, fontSize:10, fontFamily:"'Jost',sans-serif", fontWeight:700, letterSpacing:'.06em' }}>FEATURED</div>
+                )}
+                {/* Overlay actions */}
+                <div style={{ position:'absolute', inset:0, background:'rgba(0,0,0,0)', transition:'background .2s', display:'flex', alignItems:'center', justifyContent:'center', gap:8, opacity:0 }}
+                  onMouseEnter={e=>{ e.currentTarget.style.background='rgba(0,0,0,0.6)'; e.currentTarget.style.opacity=1; }}
+                  onMouseLeave={e=>{ e.currentTarget.style.background='rgba(0,0,0,0)'; e.currentTarget.style.opacity=0; }}>
+                  <button onClick={()=>handleToggleFeatured(item)} title={item.is_featured?'Unfeature':'Feature on home'}
+                    style={{ background:'rgba(255,215,0,0.9)', color:'#000', border:'none', borderRadius:8, padding:'8px 12px', fontSize:12, fontFamily:"'Jost',sans-serif", fontWeight:700, cursor:'pointer' }}>
+                    {item.is_featured ? '★ Unfeature' : '☆ Feature'}
+                  </button>
+                  <button onClick={()=>setDeleteConfirm(item)} title="Delete artwork"
+                    style={{ background:'rgba(220,50,50,0.9)', color:'#fff', border:'none', borderRadius:8, padding:'8px 12px', fontSize:12, fontFamily:"'Jost',sans-serif", fontWeight:700, cursor:'pointer' }}>
+                    🗑 Delete
+                  </button>
+                </div>
+              </div>
+              {/* Info */}
+              <div style={{ padding:'12px 14px' }}>
+                <div style={{ fontFamily:"'Jost',sans-serif", fontSize:13, fontWeight:600, color:C.text, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{item.title}</div>
+                <div style={{ fontFamily:"'Jost',sans-serif", fontSize:11, color:C.dim, marginTop:3 }}>{item.category} · {item.metal_type}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm && (
+        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.8)', zIndex:9998, display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}
+          onClick={()=>setDeleteConfirm(null)}>
+          <div onClick={e=>e.stopPropagation()} style={{ background:C.surfaceWarm, border:`1px solid ${C.border}`, borderRadius:20, padding:36, maxWidth:400, width:'100%', textAlign:'center' }}>
+            <div style={{ fontSize:40, marginBottom:16 }}>🗑️</div>
+            <h3 style={{ fontFamily:"'Cinzel',serif", fontSize:20, color:C.text, margin:'0 0 10px' }}>Delete Artwork?</h3>
+            <p style={{ fontFamily:"'Jost',sans-serif", fontSize:14, color:C.dim, margin:'0 0 28px', lineHeight:1.6 }}>
+              "{deleteConfirm.title}" will be permanently removed from the gallery and website. This cannot be undone.
+            </p>
+            <div style={{ display:'flex', gap:12 }}>
+              <button onClick={()=>setDeleteConfirm(null)}
+                style={{ flex:1, padding:'12px', background:'transparent', border:`1px solid ${C.border}`, color:C.text, borderRadius:10, fontFamily:"'Jost',sans-serif", fontWeight:600, fontSize:14, cursor:'pointer' }}>
+                Cancel
+              </button>
+              <button onClick={()=>handleDelete(deleteConfirm)}
+                style={{ flex:1, padding:'12px', background:'rgba(220,50,50,0.9)', border:'none', color:'#fff', borderRadius:10, fontFamily:"'Jost',sans-serif", fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                Delete Permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const AdminDashboard = () => {
+  const C = useTheme();
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('Dashboard');
+  const [isAuth, setIsAuth] = useState(false);
+  const [inquiries, setInquiries] = useState([]);
+  const [stats, setStats] = useState({ artworks: 0, inquiries: 0, users: 0, views: 0 });
+  const [loading, setLoading] = useState(false);
+  
+  const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+  const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+
+  const fetchAdminData = useCallback(async () => {
+    if(!supabaseUrl || !supabaseKey) return;
+    try {
+      setLoading(true);
+      // Use session token if available for admin-level access
+      let authToken = supabaseKey;
+      try {
+        const sess = localStorage.getItem('vmw_session');
+        if (sess) { const p = JSON.parse(sess); if (p?.access_token) authToken = p.access_token; }
+      } catch(_) {}
+      const headers = { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}`, 'Prefer': 'count=exact', 'Range': '0-0' };
+      const headersNoCount = { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}` };
+      const [inqRes, artRes, userRes, viewRes] = await Promise.all([
+        fetch(`${supabaseUrl}/rest/v1/inquiries?select=*&order=created_at.desc`, { headers: headersNoCount }),
+        fetch(`${supabaseUrl}/rest/v1/gallery_items?select=id`, { headers }),
+        fetch(`${supabaseUrl}/rest/v1/profiles?select=id`, { headers }),
+        fetch(`${supabaseUrl}/rest/v1/analytics_events?event_type=eq.view&select=id`, { headers }),
+      ]);
+      const inqData = inqRes.ok ? await inqRes.json() : [];
+      const artCount = parseInt((artRes.headers.get('content-range') || '0/0').split('/')[1], 10) || 0;
+      const userCount = parseInt((userRes.headers.get('content-range') || '0/0').split('/')[1], 10) || 0;
+      const viewCount = parseInt((viewRes.headers.get('content-range') || '0/0').split('/')[1], 10) || 0;
+      setInquiries(inqData);
+      setStats({
+        artworks: artCount,
+        inquiries: inqData.filter(i => ['pending','new'].includes(i.status)).length || 0,
+        users: userCount,
+        views: viewCount,
+      });
+    } catch(err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  }, [supabaseUrl, supabaseKey]);
+
+  const updateInquiryStatus = async (id, newStatus) => {
+    if(!supabaseUrl || !supabaseKey) return;
+    try {
+      let authToken = supabaseKey;
+      try { const sess = localStorage.getItem('vmw_session'); if(sess){const p=JSON.parse(sess);if(p?.access_token)authToken=p.access_token;} } catch(_){}
+      const headers = { 'apikey': supabaseKey, 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' };
+      await fetch(`${supabaseUrl}/rest/v1/inquiries?id=eq.${id}`, { method: 'PATCH', headers, body: JSON.stringify({ status: newStatus }) });
+      fetchAdminData();
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    const auth = localStorage.getItem('vmw_admin_auth');
+    if(!auth) {
+      navigate('/admin/login');
+    } else {
+      setIsAuth(true);
+      fetchAdminData();
+    }
+  }, [navigate, fetchAdminData]);
+
+  if(!isAuth) return null;
+
+  const tabs = ['Dashboard', 'Gallery', 'Inquiries', 'Users', 'Collections', 'Comments', 'Analytics', 'Settings'];
+
+  const renderTabContent = () => {
+    switch(activeTab) {
+      case 'Dashboard':
+        return (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 24 }}>
+            {[
+              { label: 'Total Artworks', value: loading ? '-' : stats.artworks, icon: '🖼️' },
+              { label: 'Pending Inquiries', value: loading ? '-' : stats.inquiries, icon: '💬' },
+              { label: 'Total Users', value: loading ? '-' : stats.users, icon: '👥' },
+              { label: 'Total Views', value: loading ? '-' : stats.views, icon: '👁️' }
+            ].map(stat => (
+              <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} style={{ background: C.surfaceWarm, border: `1px solid ${C.border}`, borderRadius: 16, padding: 24 }}>
+                <div style={{ fontSize: 24, marginBottom: 12 }}>{stat.icon}</div>
+                <div style={{ fontFamily: "'Jost', sans-serif", fontSize: 14, color: C.dim, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{stat.label}</div>
+                <div style={{ fontFamily: "'Cinzel', serif", fontSize: 36, color: C.text, marginTop: 8 }}>{stat.value}</div>
+              </motion.div>
+            ))}
+          </div>
+        );
+      case 'Inquiries':
+        return (
+          <div style={{ background: C.surfaceWarm, border: `1px solid ${C.border}`, borderRadius: 16, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+              <thead>
+                <tr style={{ background: 'rgba(0,0,0,0.2)' }}>
+                  <th style={{ padding: '16px 24px', color: C.dim, fontFamily: "'Jost', sans-serif", fontSize: 13, textTransform: 'uppercase' }}>Client</th>
+                  <th style={{ padding: '16px 24px', color: C.dim, fontFamily: "'Jost', sans-serif", fontSize: 13, textTransform: 'uppercase' }}>Artwork</th>
+                  <th style={{ padding: '16px 24px', color: C.dim, fontFamily: "'Jost', sans-serif", fontSize: 13, textTransform: 'uppercase' }}>Budget</th>
+                  <th style={{ padding: '16px 24px', color: C.dim, fontFamily: "'Jost', sans-serif", fontSize: 13, textTransform: 'uppercase' }}>Status</th>
+                  <th style={{ padding: '16px 24px', color: C.dim, fontFamily: "'Jost', sans-serif", fontSize: 13, textTransform: 'uppercase' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan="5" style={{ padding: '40px', textAlign: 'center', color: C.dim }}>Loading inquiries...</td></tr>
+                ) : inquiries.length === 0 ? (
+                  <tr><td colSpan="5" style={{ padding: '40px', textAlign: 'center', color: C.dim }}>No inquiries found.</td></tr>
+                ) : inquiries.map((iq) => (
+                  <tr key={iq.id} style={{ borderBottom: `1px solid ${C.border}` }}>
+                    <td style={{ padding: '20px 24px', color: C.text, fontFamily: "'Jost', sans-serif", fontSize: 15, fontWeight: 500 }}>
+                      {iq.full_name}<br/>
+                      <span style={{ fontSize: 12, color: C.dim, fontWeight: 400 }}>{iq.phone}</span>
+                    </td>
+                    <td style={{ padding: '20px 24px', color: C.text, fontFamily: "'Jost', sans-serif", fontSize: 14 }}>
+                      {iq.artwork_type}<br/>
+                      <span style={{ fontSize: 12, color: C.dim }}>{iq.preferred_metal}</span>
+                    </td>
+                    <td style={{ padding: '20px 24px', color: C.text, fontFamily: "'Jost', sans-serif", fontSize: 14 }}>{iq.budget || 'Unspecified'}</td>
+                    <td style={{ padding: '20px 24px' }}>
+                      <select 
+                        value={iq.status} 
+                        onChange={(e) => updateInquiryStatus(iq.id, e.target.value)}
+                        style={{ padding: '4px 8px', background: iq.status === 'pending' ? 'rgba(255,215,0,0.1)' : 'rgba(0,255,100,0.1)', border: `1px solid ${iq.status === 'pending' ? C.gold : '#00ff64'}`, color: iq.status === 'pending' ? C.gold : '#00ff64', borderRadius: 4, fontSize: 12, outline: 'none', cursor: 'pointer' }}
+                      >
+                        <option value="pending" style={{background:'#000',color:'#fff'}}>Pending (New)</option>
+                        <option value="new" style={{background:'#000',color:'#fff'}}>New</option>
+                        <option value="contacted" style={{background:'#000',color:'#fff'}}>Contacted</option>
+                        <option value="in_progress" style={{background:'#000',color:'#fff'}}>In Progress</option>
+                        <option value="completed" style={{background:'#000',color:'#fff'}}>Completed</option>
+                        <option value="rejected" style={{background:'#000',color:'#fff'}}>Rejected</option>
+                      </select>
+                    </td>
+                    <td style={{ padding: '20px 24px' }}>
+                      <button onClick={() => window.open(`https://wa.me/${iq.whatsapp || iq.phone.replace(/[^0-9]/g, '')}`, '_blank')} style={{ background: 'transparent', border: `1px solid ${C.gold}`, color: C.gold, padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontFamily: "'Jost', sans-serif", fontSize: 12 }}>WhatsApp</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+      case 'Gallery':
+        return <AdminGalleryManager C={C} supabaseUrl={supabaseUrl} supabaseKey={supabaseKey} onRefreshStats={fetchAdminData} />;
+      default:
+        return <div style={{ color: C.dim }}>{activeTab} module under development.</div>;
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', minHeight: '100vh', background: C.bg1 }}>
+      <div style={{ width: 280, borderRight: `1px solid ${C.border}`, background: C.surfaceWarm, display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '32px 24px', borderBottom: `1px solid ${C.border}` }}>
+          <h2 style={{ fontFamily: "'Cinzel', serif", color: C.gold, margin: 0, fontSize: 20 }}>Studio Admin</h2>
+          <div style={{ fontSize: 12, color: C.dim, fontFamily: "'Jost', sans-serif", marginTop: 4 }}>Vijay Metal Works</div>
+        </div>
+        <div style={{ flex: 1, padding: '24px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {tabs.map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)} style={{ width: '100%', textAlign: 'left', padding: '12px 16px', background: activeTab === tab ? 'rgba(255,215,0,0.1)' : 'transparent', border: 'none', borderRadius: 8, color: activeTab === tab ? C.gold : C.text, fontFamily: "'Jost', sans-serif", fontSize: 15, fontWeight: activeTab === tab ? 600 : 400, cursor: 'pointer', transition: 'all 0.2s' }}>
+              {tab}
+            </button>
+          ))}
+        </div>
+        <div style={{ padding: 24, borderTop: `1px solid ${C.border}` }}>
+          <button onClick={() => { localStorage.removeItem('vmw_admin_auth'); localStorage.removeItem('vmw_session'); navigate('/admin/login'); }} style={{ width: '100%', textAlign: 'left', padding: '12px 16px', background: 'transparent', border: 'none', color: '#ff4444', fontFamily: "'Jost', sans-serif", fontSize: 15, cursor: 'pointer' }}>
+            Logout
+          </button>
+        </div>
+      </div>
+      
+      <div style={{ flex: 1, padding: '40px 48px', overflowY: 'auto' }}>
+        <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.3 }}>
+          <h1 style={{ fontFamily: "'Cinzel', serif", fontSize: 32, color: C.text, margin: '0 0 32px 0' }}>{activeTab}</h1>
+          {renderTabContent()}
+        </motion.div>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   ROOT APP — Router wrapper
+═══════════════════════════════════════════════════════════════ */
+function AppContent() {
   const {mode, setMode, C: themeC} = useThemeMode();
   const [loading, setLoading] = useState(true);
   const [scrolled, setScrolled] = useState(false);
+  const [showCommissionModal, setShowCommissionModal] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+  const [authAction, setAuthAction] = useState('');
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
+
+  // Fetch admin-controlled site images from Supabase
+  const siteImages = useSiteImages();
+
+  // ── Visitor Tracking — logs each visit to Supabase analytics_events with location ──
+  useEffect(() => {
+    const trackVisit = async () => {
+      const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+      const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+      if (!supabaseUrl || !supabaseKey) return;
+      // Throttle: only track once per session
+      if (sessionStorage.getItem('vmw_visit_tracked')) return;
+      sessionStorage.setItem('vmw_visit_tracked', '1');
+      try {
+        // Get visitor approximate location via free IP API
+        const geoRes = await fetch('https://ipapi.co/json/');
+        const geo = geoRes.ok ? await geoRes.json() : {};
+        await fetch(`${supabaseUrl}/rest/v1/analytics_events`, {
+          method: 'POST',
+          headers: {
+            'apikey': supabaseKey,
+            'Authorization': `Bearer ${supabaseKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            event_type: 'page_view',
+            metadata: {
+              country: geo.country_name || 'Unknown',
+              city: geo.city || 'Unknown',
+              region: geo.region || '',
+              ip: geo.ip || '',
+              page: window.location.pathname,
+              referrer: document.referrer || 'direct',
+              ua: navigator.userAgent ? navigator.userAgent.slice(0, 120) : '',
+            }
+          })
+        });
+      } catch (_) { /* silent — never block the user */ }
+    };
+    trackVisit();
+  }, []);
+
+  useEffect(() => {
+    // Handle Supabase OAuth callback — token arrives in URL hash fragment
+    const hash = window.location.hash;
+    if (hash && hash.includes('access_token=')) {
+      try {
+        const params = new URLSearchParams(hash.replace('#', ''));
+        const access_token = params.get('access_token');
+        const refresh_token = params.get('refresh_token');
+        const expires_at = params.get('expires_at');
+        if (access_token) {
+          // Fetch user info from Supabase
+          const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
+          const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
+          if (supabaseUrl && supabaseKey) {
+            fetch(`${supabaseUrl}/auth/v1/user`, {
+              headers: { apikey: supabaseKey, Authorization: `Bearer ${access_token}` }
+            })
+              .then(r => r.ok ? r.json() : null)
+              .then(userData => {
+                if (userData) {
+                  const session = { access_token, refresh_token, expires_at, user: userData };
+                  localStorage.setItem('vmw_session', JSON.stringify(session));
+                  setIsLoggedIn(true);
+                  setUser(userData);
+                  // Clean URL — remove hash without navigation
+                  window.history.replaceState(null, '', window.location.pathname);
+                }
+              })
+              .catch(() => {});
+          }
+        }
+      } catch (_) {}
+    }
+
+    const sessionStr = localStorage.getItem('vmw_session');
+    if(sessionStr) {
+      try {
+        const session = JSON.parse(sessionStr);
+        if(session && session.user && session.access_token) {
+          // Check token expiry if available
+          const expiresAt = session.expires_at; // Unix timestamp
+          if (!expiresAt || Date.now() / 1000 < expiresAt) {
+            setIsLoggedIn(true);
+            setUser(session.user);
+          } else {
+            // Token expired — clear session
+            localStorage.removeItem('vmw_session');
+          }
+        }
+      } catch(err) {
+        console.error('Session restore failed', err);
+        localStorage.removeItem('vmw_session');
+      }
+    }
+  }, []);
+  
   const done = useCallback(()=>setLoading(false),[]);
 
   // Inject dynamic CSS on theme change
@@ -3749,38 +6860,72 @@ export default function App() {
   },[]);
 
   return (
+    <SiteImgCtx.Provider value={siteImages}>
     <ThemeCtx.Provider value={themeC}>
-      <SEOMeta/>
-      <style>{buildCSS(themeC)}</style>
-      <div style={{background:themeC.bg1,color:themeC.text,overflowX:'hidden',minHeight:'100vh',transition:'background .35s,color .35s'}}>
-        <ThemeToggle mode={mode} setMode={setMode} C={themeC}/>
-        <AnimatePresence mode="wait">
-          {loading && <Loader key="loader" onDone={done}/>}
-        </AnimatePresence>
-        {!loading && (
-          <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{duration:.5}}>
-            <CanvasBg/>
-            <Grain/>
-            <Nav scrolled={scrolled}/>
-            <Hero/>
-            <Ticker/>
-            <Legacy/>
-            <TrustedByTemples/>
-            <Services/>
-            <Showcase/>
-            <RealWorkPhotos/>
-            <ProcessSection/>
-            <Gallery/>
-            <Testimonials/>
-            <FAQ/>
-            <Archive/>
-            <Contact/>
-            <Footer/>
-            <WAFab/>
-            <MobileContactBar/>
-          </motion.div>
-        )}
-      </div>
+      <AppCtx.Provider value={{ showCommissionModal, setShowCommissionModal, showAuthModal, setShowAuthModal, authAction, setAuthAction, isLoggedIn, setIsLoggedIn, user, setUser }}>
+        <SEOMeta/>
+        <div style={{background:themeC.bg1,color:themeC.text,overflowX:'hidden',minHeight:'100vh',transition:'background .35s,color .35s'}}>
+          <ThemeToggle mode={mode} setMode={setMode} C={themeC}/>
+          <AnimatePresence mode="wait">
+            {loading && <Loader key="loader" onDone={done}/>}
+          </AnimatePresence>
+          {!loading && (
+            <motion.div initial={{opacity:0}} animate={{opacity:1}} transition={{duration:.5}}>
+              <CanvasBg/>
+              <Grain/>
+              <Routes>
+                <Route path="/" element={<HomePage scrolled={scrolled}/>}/>
+                <Route path="/gallery" element={<GalleryPage scrolled={scrolled}/>}/>
+                <Route path="/gallery/immersive" element={<ImmersiveFeed />}/>
+                <Route path="/admin" element={<AdminDashboard />}/>
+                <Route path="/admin/login" element={<AdminLogin />}/>
+              </Routes>
+            </motion.div>
+          )}
+          <AnimatePresence>
+            {showCommissionModal && <CommissionModal onClose={() => setShowCommissionModal(false)} C={themeC} />}
+            {showAuthModal && <AuthModal onClose={() => setShowAuthModal(false)} action={authAction} />}
+          </AnimatePresence>
+        </div>
+      </AppCtx.Provider>
     </ThemeCtx.Provider>
+    </SiteImgCtx.Provider>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ERROR BOUNDARY — prevents full app crash on component errors
+═══════════════════════════════════════════════════════════════ */
+class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error('VMW App Error:', error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight:'100vh', background:'#080604', display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', padding:32, textAlign:'center', fontFamily:'Jost,sans-serif', color:'rgba(255,255,255,0.8)' }}>
+          <div style={{ fontSize:48, marginBottom:24 }}>⚠️</div>
+          <h2 style={{ fontFamily:'Cinzel,serif', color:'#FFD700', fontSize:28, marginBottom:12 }}>Something went wrong</h2>
+          <p style={{ color:'rgba(255,255,255,0.5)', maxWidth:480, lineHeight:1.6, marginBottom:28 }}>
+            {this.state.error?.message || 'An unexpected error occurred.'}
+          </p>
+          <button onClick={() => { this.setState({ hasError:false, error:null }); window.location.reload(); }}
+            style={{ background:'#FFD700', color:'#000', border:'none', padding:'14px 32px', borderRadius:999, fontFamily:'Jost,sans-serif', fontWeight:700, fontSize:13, letterSpacing:'.1em', textTransform:'uppercase', cursor:'pointer' }}>
+            Reload App
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+export default function App() {
+  return (
+    <ErrorBoundary>
+      <BrowserRouter>
+        <AppContent/>
+      </BrowserRouter>
+    </ErrorBoundary>
   );
 }
