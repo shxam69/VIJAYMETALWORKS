@@ -452,17 +452,29 @@ let C = THEMES.dark;
 ═══════════════════════════════════════════════════════════════ */
 const buildCSS = (C) => `
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Jost:wght@300;400;500;600;700&display=swap');
+
+/* ── Reset ── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
-body{background:${C.bg1};color:${C.text};font-family:'Jost',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased;transition:background .35s,color .35s}
+body{
+  background:${C.bg1};color:${C.text};
+  font-family:'Jost',sans-serif;
+  overflow-x:hidden;
+  -webkit-font-smoothing:antialiased;
+  -webkit-tap-highlight-color:transparent; /* removes blue flash on Android tap */
+  transition:background .35s,color .35s;
+}
 ::selection{background:${C.gold};color:#fff}
 ::-webkit-scrollbar{width:2px}
 ::-webkit-scrollbar-track{background:${C.bg1}}
 ::-webkit-scrollbar-thumb{background:${C.gold}88}
-input,textarea{font-family:'Jost',sans-serif;color:${C.text}}
+input,textarea{font-family:'Jost',sans-serif;color:${C.text};font-size:16px} /* 16px prevents iOS zoom */
 input::placeholder,textarea::placeholder{color:${C.faint}}
-button{font-family:'Jost',sans-serif;cursor:pointer}
+button{font-family:'Jost',sans-serif;cursor:pointer;touch-action:manipulation}
+a{touch-action:manipulation}
+img{image-rendering:auto;-webkit-image-rendering:auto;max-width:100%}
 
+/* ── Keyframes ── */
 @keyframes starBorderSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 @keyframes goldShine{0%{background-position:-200% center}100%{background-position:200% center}}
 @keyframes rippleOut{0%{transform:scale(0);opacity:0.5;border-radius:50%}100%{transform:scale(4);opacity:0;border-radius:50%}}
@@ -475,48 +487,129 @@ button{font-family:'Jost',sans-serif;cursor:pointer}
 @keyframes logoGlow{0%,100%{opacity:.3}50%{opacity:.9}}
 @keyframes flameFlicker{0%,100%{transform:scaleY(1) skewX(0deg);opacity:.9}30%{transform:scaleY(1.1) skewX(-2deg);opacity:1}60%{transform:scaleY(.95) skewX(1deg);opacity:.8}}
 
+/* ── Utilities ── */
 .will-transform{will-change:transform}
 .skeleton{
   background:linear-gradient(90deg,${C.isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.04)'} 25%,${C.isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.08)'} 50%,${C.isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.04)'} 75%);
   background-size:400px 100%;
   animation:skeletonShimmer 1.6s ease-in-out infinite;
 }
+.vmw-img{background:#0a0806}
+.gold-text,.text-gold{color:#FFD700!important;text-shadow:0 1px 2px rgba(0,0,0,.8);mix-blend-mode:screen}
+
+/* ── Touch-friendly CTA buttons ── */
+.vmw-btn-primary,.vmw-btn-secondary{touch-action:manipulation}
+
+/* ── Mobile nav bar — off on desktop ── */
+.vmw-mobile-nav{display:none!important}
+
+/* ── Theme toggle position ── */
+.theme-toggle{right:70px!important}
+@media(max-width:768px){.theme-toggle{display:none!important}}
+
+/* ── Backdrop fallback (older Android) ── */
+@supports not (backdrop-filter:blur(1px)){
+  .vmw-mobile-contact-bar{background:${C.isDark?'rgba(20,18,16,0.99)':'rgba(245,240,232,0.99)'}!important}
+  .nav-desktop{background:${C.isDark?'rgba(8,6,4,0.99)':'rgba(245,240,232,0.99)'}!important}
+}
+
+/* ── Only apply hover effects on pointer devices — no sticky hover on touch ── */
+@media(hover:hover) and (pointer:fine){
+  .vmw-card:hover img{transform:scale(1.06)}
+  .preview-masonry-item:hover{transform:translateY(-4px);border-color:rgba(255,215,0,0.4)}
+  .preview-masonry-item:hover img{transform:scale(1.08)}
+}
+
+/* ════════════════════════════════════════════════
+   DESKTOP (≥1025px) — Full layout
+════════════════════════════════════════════════ */
+@media(min-width:1025px){
+  .nav-desktop{display:flex!important}
+  .vmw-mobile-nav{display:none!important}
+  .mobile-sticky-bar{display:none!important}
+  .section-pad{padding:140px 56px}
+  .two-col{grid-template-columns:1fr 1fr;gap:80px}
+  .preview-masonry{columns:3;column-gap:12px}
+}
+
+/* ════════════════════════════════════════════════
+   TABLET (769px – 1024px) — Windows tablet / iPad landscape
+════════════════════════════════════════════════ */
+@media(max-width:1024px) and (min-width:769px){
+  .nav-desktop{display:flex!important}
+  .vmw-mobile-nav{display:none!important}
+  .mobile-sticky-bar{display:none!important}
+  .section-pad{padding:100px 36px!important}
+  .two-col{grid-template-columns:1fr 1fr!important;gap:44px!important}
+  .vmw-craftwork{height:420px!important}
+  .footer-contact-grid{grid-template-columns:repeat(4,1fr)!important}
+  .preview-masonry{columns:3!important;column-gap:10px!important}  .vmw-services-panel{padding:32px 28px!important}
+  .archive-grid{grid-template-columns:repeat(3,1fr)!important;grid-template-rows:auto!important}
+  .gallery-grid{grid-template-columns:repeat(3,1fr)!important}
+  .theme-toggle{right:70px!important}
+}
+
+/* ════════════════════════════════════════════════
+   MOBILE (≤768px) — Android / iPhone / iPad portrait
+════════════════════════════════════════════════ */
 @media(max-width:768px){
+  /* Nav */
   .nav-desktop{display:none!important}
-  .mobile-sticky-bar{display:flex!important}
-  .hero-3d{width:180px!important;height:180px!important}
-  .two-col{grid-template-columns:1fr!important;gap:44px!important}
-  .section-pad{padding:80px 24px!important}
+  .vmw-mobile-nav{display:flex!important}
+  .mobile-sticky-bar{display:none!important}
+  .theme-toggle{top:10px!important;right:10px!important;z-index:300}
+
+  /* Layout */
+  .section-pad{padding:72px 20px!important}
+  .two-col{grid-template-columns:1fr!important;gap:28px!important}
+  .hero-3d{width:160px!important;height:160px!important}
+
+  /* Sections */
+  .vmw-craftwork{height:280px!important}
+  .vmw-services-panel{padding:20px 16px!important}
+  .vmw-services-panel>div{padding:16px 0!important}
+
+  /* Gallery */
   .archive-grid{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:auto!important}
   .gallery-grid{grid-template-columns:repeat(2,1fr)!important;gap:6px!important}
-  .footer-cols{grid-template-columns:1fr!important;gap:28px!important}
-  .wa-fab{bottom:90px!important}
   .gallery-masonry{columns:2;column-gap:6px}
   .gallery-masonry>*{break-inside:avoid;margin-bottom:6px}
-}
-img{image-rendering:auto;-webkit-image-rendering:auto}
-.vmw-img{background:#0a0806}
-.theme-toggle{right:70px!important}
+  .preview-masonry{columns:2!important;column-gap:6px!important}
 
-.gold-text, .text-gold {
-  color:#FFD700 !important;
-  text-shadow:0 1px 2px rgba(0,0,0,.8);
-  mix-blend-mode:screen;
-}
+  /* Footer */
+  .footer-cols{grid-template-columns:1fr!important;gap:20px!important}
+  .footer-contact-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
 
-/* Process timeline mobile */
-@media (max-width: 768px) {
-  .vmw-process-grid {
-    grid-template-columns: 40px 1fr !important;
-    gap: 0 !important;
-  }
-  .vmw-process-img { display:none !important; }
-  .vmw-process-node { grid-column:1 !important; }
-  .vmw-process-content { grid-column:2 !important; padding-left:16px !important; padding-right:0 !important; }
+  /* FAB */
+  .wa-fab{bottom:76px!important;right:14px!important}
+
+  /* Modals */
+  .vmw-commission-grid-2{grid-template-columns:1fr!important}
+  .vmw-commission-grid-4{grid-template-columns:1fr 1fr!important}
 }
 
-@media (prefers-color-scheme: dark) {
-  .hero-title { filter: brightness(1.4); }
+/* ════════════════════════════════════════════════
+   SMALL MOBILE (≤430px) — iPhone SE / Galaxy A series
+════════════════════════════════════════════════ */
+@media(max-width:430px){
+  .section-pad{padding:60px 16px!important}
+  .two-col{gap:20px!important}
+  .archive-grid{grid-template-columns:1fr 1fr!important}
+  .footer-contact-grid{grid-template-columns:1fr 1fr!important}
+  .preview-masonry{columns:2!important}
+  .theme-toggle{top:8px!important;right:8px!important}
+}
+
+/* ── Process timeline mobile ── */
+@media(max-width:768px){
+  .vmw-process-grid{grid-template-columns:40px 1fr!important;gap:0!important}
+  .vmw-process-img{display:none!important}
+  .vmw-process-node{grid-column:1!important}
+  .vmw-process-content{grid-column:2!important;padding-left:16px!important;padding-right:0!important}
+}
+
+@media(prefers-color-scheme:dark){
+  .hero-title{filter:brightness(1.4)}
 }
 `;
 const CSS = buildCSS(C);
@@ -1105,7 +1198,7 @@ const CraftworkPanel = () => {
   }, []);
 
   return (
-    <div style={{ position:'relative', height:540, overflow:'hidden', border:`1px solid ${C.border}`, background:C.bg2 }}>
+    <div className="vmw-craftwork" style={{ position:'relative', height:540, overflow:'hidden', border:`1px solid ${C.border}`, background:C.bg2 }}>
       <AnimatePresence mode="wait">
         <motion.img
           key={active}
@@ -1768,6 +1861,9 @@ const Nav = ({ scrolled }) => {
         </motion.div>
       </motion.div>
 
+      {/* ── Mobile top nav bar (shown only on ≤768px) ── */}
+      <MobileNav onMenuOpen={() => setMenuOpen(true)} C={C} />
+
       {/* ── Mobile fullscreen menu overlay ── */}
       <AnimatePresence>
         {menuOpen && isMobile && (
@@ -1778,13 +1874,22 @@ const Nav = ({ scrolled }) => {
             transition={{ duration: .35, ease: [.16,1,.3,1] }}
             style={{
               position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-              zIndex: 119,
-              background: C.isDark ? 'rgba(14,11,8,0.98)' : 'rgba(248,243,235,0.98)',
-              backdropFilter: 'blur(24px)',
-              overflowY: 'auto',
-              paddingTop: 80, paddingBottom: 40, paddingLeft: 24, paddingRight: 24,
+              zIndex: 200,
+              background: C.isDark ? 'rgba(8,6,4,0.99)' : 'rgba(248,243,235,0.99)',
+              backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
+              overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+              paddingTop: 72, paddingBottom: 40, paddingLeft: 24, paddingRight: 24,
             }}
           >
+            {/* Close button */}
+            <button onClick={() => setMenuOpen(false)}
+              style={{ position:'absolute', top:12, right:16, background:'none',
+                border:`1px solid ${C.border}`, color:C.dim, fontSize:20,
+                width:44, height:44, borderRadius:10, cursor:'pointer',
+                display:'flex',alignItems:'center',justifyContent:'center',
+                touchAction:'manipulation' }}>
+              ✕
+            </button>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {navCards.map((card, ci) => (
                 <div key={card.label} style={{ marginBottom: 18 }}>
@@ -1848,7 +1953,7 @@ const Hero = () => {
   const textY = useTransform(scrollYProgress,[0,1],['0%','6%']);
   const fade = useTransform(scrollYProgress,[0,.7],[1,0]);
   return (
-    <section id="home" ref={ref} style={{position:'relative',height:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
+    <section id="home" ref={ref} className="vmw-hero" style={{position:'relative',height:'100svh',minHeight:'100svh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',overflow:'hidden',paddingTop:'env(safe-area-inset-top,0px)'}}>
       {/* Deep luxury black gradient background — no stock photo */}
       <div style={{position:'absolute',inset:0,zIndex:1,background:'radial-gradient(ellipse 90% 70% at 50% 30%, #1a1000 0%, #080604 55%, #050402 100%)'}}/>
       {/* Subtle warm gold vignette */}
@@ -1867,7 +1972,7 @@ const Hero = () => {
         <line x1="100%" y1="100%" x2="100%" y2="calc(100% - 180px)" stroke="#FFD700" strokeWidth=".5"/>
       </svg>
 
-      <motion.div style={{y:textY,opacity:fade,position:'relative',zIndex:3,textAlign:'center',padding:'0 24px',maxWidth:1080,width:'100%'}}>
+      <motion.div style={{y:textY,opacity:fade,position:'relative',zIndex:3,textAlign:'center',padding:'0 24px',maxWidth:1080,width:'100%',paddingTop:'clamp(56px,8vw,0px)'}}>
         <motion.div initial={{opacity:0,y:18}} animate={{opacity:1,y:0}} transition={{duration:1.1,delay:2.1}}
           style={{display:'inline-flex',alignItems:'center',gap:10,marginBottom:32,border:`1px solid rgba(255,215,0,0.22)`,padding:'8px 22px',background:'rgba(255,215,0,0.04)',backdropFilter:'blur(8px)'}}>
           <Dot/>
@@ -1934,7 +2039,7 @@ const Legacy = () => {
   return (
     <section id="legacy" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg2}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
-        <div className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:96,alignItems:'center',marginBottom:88}}>
+        <div className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'clamp(28px,5vw,96px)',alignItems:'center',marginBottom:88}}>
           <SlideLeft>
             <span style={{...ff.body,fontSize:8,letterSpacing:'.52em',color:C.dim,fontWeight:600,textTransform:'uppercase',display:'block',marginBottom:18,opacity:.8}}>The Bloodline of Art</span>
             <h2 style={{...ff.display,fontSize:'clamp(34px,5.8vw,70px)',lineHeight:.88,letterSpacing:'.04em',color:C.text,fontWeight:700,marginBottom:28}}>OVER A<br/><span style={{color:C.gold}}>CENTURY</span><br/>OF DEVOTION</h2>
@@ -2038,7 +2143,7 @@ const TrustedByTemples = () => {
     { name:'Kapaleeswarar', loc:'Chennai', img:'/gallery/temple/temple.jpg' },
   ];
   return (
-    <section style={{position:'relative',zIndex:2,padding:'100px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
+    <section className="section-pad" style={{position:'relative',zIndex:2,padding:'100px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:56}}>
@@ -2051,7 +2156,12 @@ const TrustedByTemples = () => {
             </p>
           </div>
         </Reveal>
-        <StaggerContainer stagger={0.09} delay={0.1} style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:2}}>
+        <style>{`
+          .vmw-temples-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px}
+          @media(max-width:768px){.vmw-temples-grid{grid-template-columns:repeat(2,1fr);gap:2px}}
+          @media(max-width:430px){.vmw-temples-grid{grid-template-columns:repeat(2,1fr)}}
+        `}</style>
+        <StaggerContainer stagger={0.09} delay={0.1} className="vmw-temples-grid">
           {temples.map((t,i)=>{
             const Item = i % 2 === 0 ? StaggerItemLeft : StaggerItemRight;
             return (
@@ -2183,8 +2293,8 @@ const Services = () => {
         </div>
         <AnimatePresence mode="wait">
           <motion.div key={active} initial={{opacity:0,y:18}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-18}} transition={{duration:.55,ease:[.16,1,.3,1]}}
-            className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1.5fr',border:`1px solid ${C.border}`,minHeight:500}}>
-            <div style={{position:'relative',overflow:'hidden',minHeight:380}}>
+            className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1.5fr',border:`1px solid ${C.border}`,minHeight:'auto'}}>
+            <div style={{position:'relative',overflow:'hidden',minHeight:280}}>
               <img src={m.img} alt={m.name} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',opacity:.5,filter:'sepia(18%)'}}/>
               <div style={{position:'absolute',inset:0,background:'linear-gradient(to right,transparent 40%,rgba(20,18,16,.92) 100%)'}}/>
               <div style={{position:'absolute',bottom:32,left:28}}>
@@ -2194,7 +2304,7 @@ const Services = () => {
                 <div style={{...ff.serif,fontSize:13,lineHeight:1.85,color:C.dim,fontStyle:'italic',maxWidth:220}}>{m.desc}</div>
               </div>
             </div>
-            <div style={{padding:'44px 48px',display:'flex',flexDirection:'column'}}>
+            <div className="vmw-services-panel" style={{padding:'44px 48px',display:'flex',flexDirection:'column'}}>
               {m.services.map((s,i)=>(
                 <div key={s.t} style={{borderBottom:`1px solid ${C.border}`,padding:'22px 0',...(i===m.services.length-1?{borderBottom:'none'}:{})}}>
                   <div style={{display:'flex',gap:16,alignItems:'flex-start'}}>
@@ -2227,7 +2337,7 @@ const Showcase = () => {
   return (
   <section id="showcase" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
     <div style={{maxWidth:1240,margin:'0 auto'}}>
-      <div className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:80,alignItems:'center'}}>
+      <div className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'clamp(28px,5vw,80px)',alignItems:'center'}}>
         <SlideLeft>
           <span style={{...ff.body,fontSize:8,letterSpacing:'.52em',color:C.dim,fontWeight:600,textTransform:'uppercase',display:'block',marginBottom:18,opacity:.8}}>Masterpiece Gallery</span>
           <h2 style={{...ff.display,fontSize:'clamp(30px,5vw,62px)',lineHeight:.9,letterSpacing:'.04em',color:C.text,fontWeight:700,marginBottom:24}}>OUR SACRED<br/><span style={{color:C.gold}}>CRAFT</span></h2>
@@ -2279,7 +2389,7 @@ const RealWorkPhotos = () => {
     { img: DI.work6, label:'Panchaloha Vigraham', desc:'Authentic Panchaloha deity — cast and finished to full Agamic temple specifications, 2023.' },
   ];
   return (
-    <section style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
+    <section className="section-pad" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:60}}>
@@ -2292,7 +2402,12 @@ const RealWorkPhotos = () => {
             </p>
           </div>
         </Reveal>
-        <StaggerContainer stagger={0.12} delay={0.08} style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
+        <style>{`
+          .vmw-work-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+          @media(max-width:768px){.vmw-work-grid{grid-template-columns:repeat(2,1fr)!important}}
+          @media(max-width:430px){.vmw-work-grid{grid-template-columns:1fr 1fr!important}}
+        `}</style>
+        <StaggerContainer stagger={0.12} delay={0.08} className="vmw-work-grid" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
           {photos.map((p,i)=>{
             const Item = i % 3 === 1 ? StaggerItemScale : (i % 2 === 0 ? StaggerItemLeft : StaggerItemRight);
             return (
@@ -2390,7 +2505,7 @@ const ProcessSection = () => {
   ];
 
   return (
-    <section style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg1,borderTop:`1px solid ${C.border}`}}>
+    <section className="section-pad" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg1,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
 
         {/* Header */}
@@ -3798,7 +3913,7 @@ const Testimonials = () => {
   const t = testimonials[active];
 
   return (
-    <section id="testimonials" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
+    <section id="testimonials" className="section-pad" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:64}}>
@@ -3853,7 +3968,8 @@ const Testimonials = () => {
         </div>
 
         {/* Navigation + mini cards grid */}
-        <StaggerContainer stagger={0.12} delay={0.05} style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:36}}>
+        <style>{`.vmw-testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:36px}@media(max-width:768px){.vmw-testi-grid{grid-template-columns:1fr!important}}`}</style>
+        <StaggerContainer stagger={0.12} delay={0.05} className="vmw-testi-grid" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:36}}>
           {testimonials.map((tm,i)=>{
             const Item = i % 2 === 0 ? StaggerItemLeft : StaggerItemRight;
             return (
@@ -3908,7 +4024,7 @@ const FAQ = () => {
   ];
 
   return (
-    <section id="faq" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
+    <section id="faq" className="section-pad" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:960,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:56}}>
@@ -3994,9 +4110,17 @@ const Archive = () => {
             </p>
           </SlideRight>
         </div>
-        <div className="archive-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gridTemplateRows:'repeat(2,272px)',gap:6}}>
+        <style>{`
+          .vmw-archive-grid{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,272px);gap:6px}
+          @media(max-width:768px){.vmw-archive-grid{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:auto!important;gap:6px!important}}
+          @media(max-width:430px){.vmw-archive-grid{grid-template-columns:1fr 1fr!important}}
+          .vmw-archive-item{min-height:160px}
+          @media(max-width:768px){.vmw-archive-span2{grid-column:span 1!important;grid-row:span 1!important}}
+        `}</style>
+        <div className="vmw-archive-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gridTemplateRows:'repeat(2,272px)',gap:6}}>
           {pieces.map((p,pidx)=>(
             <motion.div key={p.id} onHoverStart={()=>setHov(p.id)} onHoverEnd={()=>setHov(null)}
+              className={p.large ? 'vmw-archive-span2 vmw-archive-item' : 'vmw-archive-item'}
               initial={{ opacity:0, y:36 }}
               whileInView={{ opacity:1, y:0 }}
               viewport={{ once:false, margin:'-50px' }}
@@ -4259,17 +4383,17 @@ const Contact = () => {
             Enquire Now
           </motion.button>
           
-          <div style={{marginTop:48,paddingTop:48,borderTop:`1px solid ${C.border}`,display:'flex',justifyContent:'center',gap:40,flexWrap:'wrap'}}>
+          <div style={{marginTop:48,paddingTop:48,borderTop:`1px solid ${C.border}`,display:'flex',justifyContent:'center',gap:'clamp(16px,4vw,40px)',flexWrap:'wrap'}}>
             {[
               { icon:'☎', txt:BIZ.phone, link:`tel:${BIZ.phoneTel}` },
               { icon:'✉', txt:BIZ.email, link:`mailto:${BIZ.email}` },
               { icon:'💬', txt:`WhatsApp: ${BIZ.phone}`, link:BIZ.whatsapp },
-              { icon:'📍', txt:BIZ.address, link:BIZ.mapLink },
+              { icon:'📍', txt:'Sowcarpet, Chennai', link:BIZ.mapLink },
             ].map(c=>(
               <motion.a key={c.txt} href={c.link} target="_blank" rel="noopener noreferrer" whileHover={{y:-2}}
-                style={{display:'flex',alignItems:'center',gap:12,textDecoration:'none'}}>
-                <span style={{fontSize:16,color:C.gold}}>{c.icon}</span>
-                <span style={{...ff.body,fontSize:11,color:C.dim,letterSpacing:'.05em',textTransform:'uppercase'}}>{c.txt}</span>
+                style={{display:'flex',alignItems:'center',gap:10,textDecoration:'none',minWidth:0}}>
+                <span style={{fontSize:16,color:C.gold,flexShrink:0}}>{c.icon}</span>
+                <span style={{...ff.body,fontSize:11,color:C.dim,letterSpacing:'.05em',textTransform:'uppercase',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.txt}</span>
               </motion.a>
             ))}
           </div>
@@ -4285,7 +4409,7 @@ const Contact = () => {
 const Footer = () => {
   const C = useTheme();
   return (
-  <footer style={{position:'relative',zIndex:2,padding:'76px 56px 44px',background:C.bg1,borderTop:`1px solid ${C.border}`,textAlign:'center'}}>
+  <footer className="section-pad" style={{position:'relative',zIndex:2,padding:'76px 56px 44px',background:C.bg1,borderTop:`1px solid ${C.border}`,textAlign:'center',paddingBottom:'calc(44px + env(safe-area-inset-bottom,0px))'}}>
     <FadeIn duration={1.1}>
     <div style={{maxWidth:960,margin:'0 auto'}}>
       <div style={{display:'flex',justifyContent:'center',marginBottom:20}}>
@@ -4300,7 +4424,7 @@ const Footer = () => {
       <GoldRule my={28}/>
 
       {/* Footer Quick Contact Buttons — enhanced */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:40,maxWidth:720,margin:'0 auto 40px'}}>
+      <div className="footer-contact-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:40,maxWidth:720,margin:'0 auto 40px'}}>
         {[
           { icon:'📞', label:'Call Now', sub:BIZ.phone, action:()=>window.open(`tel:${BIZ.phoneTel}`), highlight:false },
           { icon:'💬', label:'WhatsApp', sub:'Chat Instantly', action:()=>window.open(BIZ.whatsapp), highlight:true },
@@ -4359,7 +4483,7 @@ const WAFab = () => {
         <motion.div initial={{scale:0,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0}}
           transition={{type:'spring',stiffness:280,damping:20}}
           className="wa-fab"
-          style={{position:'fixed',bottom:30,right:30,zIndex:200}}>
+          style={{position:'fixed',bottom:'calc(env(safe-area-inset-bottom,0px) + 24px)',right:20,zIndex:200}}>
           <AnimatePresence>
             {tip && (
               <motion.div initial={{opacity:0,x:8}} animate={{opacity:1,x:0}} exit={{opacity:0,x:8}}
@@ -4384,16 +4508,55 @@ const WAFab = () => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
+   MOBILE TOP NAV BAR — shown only on ≤768px
+   Provides logo + hamburger to open the fullscreen menu overlay
+═══════════════════════════════════════════════════════════════ */
+const MobileNav = ({ onMenuOpen, C }) => (
+  <div className="vmw-mobile-nav" style={{
+    position:'fixed', top:0, left:0, right:0, zIndex:130,
+    height:56, display:'flex', alignItems:'center', justifyContent:'space-between',
+    padding:'0 14px',
+    background: C.isDark ? 'rgba(8,6,4,0.97)' : 'rgba(245,240,232,0.97)',
+    borderBottom:`1px solid ${C.isDark?'rgba(255,215,0,0.12)':'rgba(180,130,10,0.18)'}`,
+    backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)',
+  }}>
+    {/* Logo */}
+    <div style={{display:'flex',alignItems:'center',gap:8,flex:1,minWidth:0}}>
+      <svg width="26" height="26" viewBox="0 0 40 40" style={{flexShrink:0}}>
+        <rect x="4" y="4" width="32" height="32" rx="2" fill="none" stroke={C.gold} strokeWidth="1.4" transform="rotate(45 20 20)"/>
+        <text x="20" y="26" textAnchor="middle" fontFamily="'Cinzel',serif" fontSize="13" fontWeight="700" fill={C.gold}>V</text>
+      </svg>
+      <div style={{minWidth:0}}>
+        <div style={{...ff.display,fontSize:9.5,letterSpacing:'.16em',color:C.text,fontWeight:700,lineHeight:1.2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>VIJAY METAL WORKS</div>
+        <div style={{...ff.body,fontSize:6,letterSpacing:'.3em',color:C.gold,fontWeight:600}}>SINCE 1915</div>
+      </div>
+    </div>
+    {/* Hamburger */}
+    <button onClick={onMenuOpen} aria-label="Open menu"
+      style={{background:'none',border:`1px solid ${C.isDark?'rgba(255,215,0,0.22)':'rgba(180,130,10,0.22)'}`,
+        borderRadius:8, padding:'7px 9px', cursor:'pointer',
+        display:'flex',flexDirection:'column',gap:5,alignItems:'center',justifyContent:'center',
+        minWidth:44, minHeight:44, touchAction:'manipulation', flexShrink:0}}>
+      {[0,1,2].map(i=>(
+        <div key={i} style={{width:i===1?14:20,height:2,borderRadius:2,
+          background:C.isDark?'rgba(255,255,255,0.88)':'rgba(20,10,0,0.82)'}}/>
+      ))}
+    </button>
+  </div>
+);
+
+/* ═══════════════════════════════════════════════════════════════
    STICKY MOBILE CONTACT BAR (enhanced)
 ═══════════════════════════════════════════════════════════════ */
 const MobileContactBar = () => {
   const C = useTheme();
   return (
-  <div className="mobile-sticky-bar"
+  <div className="mobile-sticky-bar vmw-mobile-contact-bar"
     style={{display:'none',position:'fixed',bottom:0,left:0,right:0,zIndex:190,
       flexDirection:'column',
       background:C.isDark?'rgba(20,18,16,0.97)':'rgba(245,240,232,0.97)',borderTop:`1px solid ${C.border}`,
-      backdropFilter:'blur(24px)',paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
+      backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)',
+      paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
     <div style={{height:1,background:'linear-gradient(90deg,transparent,rgba(255,215,0,0.3),transparent)'}}/>
     <div style={{display:'flex',gap:0,padding:'10px 12px 10px'}}>
       {[
@@ -4402,16 +4565,16 @@ const MobileContactBar = () => {
         { label:'✉ Email', sub:'Get Quote', action:()=>window.open(`mailto:${BIZ.email}`), primary:false },
       ].map((btn,i)=>(
         <button key={btn.label} onClick={btn.action}
-          style={{flex:1,padding:'11px 4px 9px',...ff.body,
+          style={{flex:1,padding:'12px 4px 10px',...ff.body,
             marginLeft:i===1?4:0, marginRight:i===1?4:0,
             background:btn.primary?C.gold:'transparent',
             border:`1px solid ${btn.primary?C.goldLt:C.border}`,
-            borderRadius:btn.primary?3:2,
-            cursor:'pointer',transition:'all .25s',
+            borderRadius:btn.primary?6:4,
+            cursor:'pointer',transition:'all .25s',touchAction:'manipulation',
             display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
-          <span style={{fontSize:8,letterSpacing:'.18em',fontWeight:700,textTransform:'uppercase',
-            color:btn.primary?'#fff':C.dim}}>{btn.label}</span>
-          <span style={{fontSize:6.5,letterSpacing:'.18em',color:btn.primary?'rgba(255,255,255,.55)':C.faint,
+          <span style={{fontSize:9,letterSpacing:'.14em',fontWeight:700,textTransform:'uppercase',
+            color:btn.primary?'#000':C.dim}}>{btn.label}</span>
+          <span style={{fontSize:7,letterSpacing:'.12em',color:btn.primary?'rgba(0,0,0,.55)':C.faint,
             textTransform:'uppercase'}}>{btn.sub}</span>
         </button>
       ))}
@@ -4536,15 +4699,9 @@ const GalleryPreview = ({ onViewAll }) => {
 
         {/* Premium Masonry Showcase */}
         <style>{`
-          .preview-masonry { columns: 3; column-gap: 12px; margin-bottom: 48px; }
-          .preview-masonry-item { break-inside: avoid; margin-bottom: 12px; position: relative; overflow: hidden; border-radius: 8px; border: 1px solid rgba(255,215,0,0.15); cursor: pointer; transition: transform 0.4s, border-color 0.4s; }
-          .preview-masonry-item:hover { transform: translateY(-4px); border-color: rgba(255,215,0,0.4); }
+          .preview-masonry { column-gap: 10px; margin-bottom: 48px; }
+          .preview-masonry-item { break-inside: avoid; -webkit-column-break-inside: avoid; margin-bottom: 10px; position: relative; overflow: hidden; border-radius: 8px; border: 1px solid rgba(255,215,0,0.15); cursor: pointer; transition: transform 0.4s, border-color 0.4s; }
           .preview-masonry-item img { width: 100%; display: block; filter: sepia(8%); transition: transform 0.8s ease; }
-          .preview-masonry-item:hover img { transform: scale(1.08); }
-          @media (max-width: 768px) {
-            .preview-masonry { columns: 2; column-gap: 8px; }
-            .preview-masonry-item { margin-bottom: 8px; border-radius: 6px; }
-          }
         `}</style>
         <div className="preview-masonry">
           {featured.map((idol,idx)=>{
@@ -5713,10 +5870,10 @@ const ProfileModal = ({ onClose, C }) => {
       onClick={onClose}>
       <motion.div initial={{scale:0.97,y:20,opacity:0}} animate={{scale:1,y:0,opacity:1}} exit={{scale:0.97,y:10,opacity:0}}
         onClick={e=>e.stopPropagation()}
-        style={{width:'100%',maxWidth:800,maxHeight:'90vh',display:'flex',flexDirection:'column',background:C.bg1,border:`1px solid ${C.border}`,borderRadius:24,overflow:'hidden',boxShadow:'0 32px 80px rgba(0,0,0,0.8)'}}>
+        style={{width:'100%',maxWidth:800,maxHeight:'92vh',display:'flex',flexDirection:'column',background:C.bg1,border:`1px solid ${C.border}`,borderRadius:24,overflow:'hidden',boxShadow:'0 32px 80px rgba(0,0,0,0.8)'}}>
         
         {/* Profile Header */}
-        <div style={{padding:'40px 48px',display:'flex',alignItems:'center',gap:32,borderBottom:`1px solid ${C.border}`,position:'relative', flexWrap:'wrap'}}>
+        <div style={{padding:'32px 32px',display:'flex',alignItems:'center',gap:24,borderBottom:`1px solid ${C.border}`,position:'relative',flexWrap:'wrap'}}>
           <button onClick={onClose} style={{position:'absolute',top:24,right:24,background:'none',border:'none',color:C.dim,fontSize:24,cursor:'pointer'}}>×</button>
           
           <div style={{position:'relative',width:110,height:110,flexShrink:0}}>
@@ -5922,73 +6079,82 @@ const CommissionModal = ({ onClose, C }) => {
 
   return (
     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-      style={{position:'fixed',inset:0,zIndex:3000,background:'rgba(0,0,0,0.85)',backdropFilter:'blur(20px)',display:'flex',justifyContent:'center',alignItems:'center',padding:20}}
+      style={{position:'fixed',inset:0,zIndex:3000,background:'rgba(0,0,0,0.85)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',justifyContent:'center',alignItems:'flex-end',padding:0}}
       onClick={onClose}>
-      <motion.div initial={{scale:0.95,y:20}} animate={{scale:1,y:0}} exit={{scale:0.95,y:20}}
+      <motion.div initial={{y:'100%'}} animate={{y:0}} exit={{y:'100%'}}
+        transition={{type:'spring',damping:28,stiffness:220}}
         onClick={e=>e.stopPropagation()}
-        style={{width:'100%',maxWidth:650,maxHeight:'90vh',overflowY:'auto',background:C.bg1,border:`1px solid ${C.border}`,borderRadius:24,boxShadow:'0 24px 60px rgba(0,0,0,0.8)'}}>
+        style={{width:'100%',maxWidth:650,maxHeight:'92vh',overflowY:'auto',WebkitOverflowScrolling:'touch',background:C.bg1,border:`1px solid ${C.border}`,borderRadius:'20px 20px 0 0',boxShadow:'0 -24px 60px rgba(0,0,0,0.8)',paddingBottom:'env(safe-area-inset-bottom,0px)',alignSelf:'flex-end',
+          /* Centre on desktop */
+          margin:'0 auto',
+        }}>
+        <style>{`
+          @media(min-width:540px){
+            .vmw-commission-sheet{border-radius:20px!important;margin:auto!important;align-self:center!important}
+          }
+        `}</style>
         
         {!done ? (
           <>
-            <div style={{padding:'32px 32px 20px',borderBottom:`1px solid ${C.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            {/* Drag handle */}
+            <div style={{width:40,height:4,background:'rgba(255,215,0,0.3)',borderRadius:2,margin:'14px auto 0'}}/>
+            <div style={{padding:'20px 24px 16px',borderBottom:`1px solid ${C.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div>
-                <h2 style={{...ff.display,fontSize:24,color:C.gold,margin:0}}>Commission Request</h2>
-                <p style={{...ff.body,fontSize:14,color:C.dim,margin:'4px 0 0'}}>Begin your sacred project with us.</p>
+                <h2 style={{...ff.display,fontSize:22,color:C.gold,margin:0}}>Commission Request</h2>
+                <p style={{...ff.body,fontSize:13,color:C.dim,margin:'4px 0 0'}}>Begin your sacred project with us.</p>
               </div>
-              <button onClick={onClose} style={{background:'none',border:'none',color:C.dim,fontSize:24,cursor:'pointer'}}>×</button>
+              <button onClick={onClose} style={{background:'none',border:'none',color:C.dim,fontSize:26,cursor:'pointer',minWidth:44,minHeight:44,display:'flex',alignItems:'center',justifyContent:'center',touchAction:'manipulation'}}>×</button>
             </div>
-            <form onSubmit={submit} style={{padding:32,display:'flex',flexDirection:'column',gap:20}}>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
-                <input name="fullName" required placeholder="Full Name" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
-                <input name="phone" required placeholder="Phone Number" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+            <form onSubmit={submit} style={{padding:'20px 24px',display:'flex',flexDirection:'column',gap:14}}>
+              <div className="vmw-commission-grid-2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+                <input name="fullName" required placeholder="Full Name" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
+                <input name="phone" required placeholder="Phone Number" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
-                <input name="email" required type="email" placeholder="Email Address" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
-                <input name="whatsapp" placeholder="WhatsApp Number (Optional)" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+              <div className="vmw-commission-grid-2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+                <input name="email" required type="email" placeholder="Email Address" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
+                <input name="whatsapp" placeholder="WhatsApp (Optional)" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
               </div>
-              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
-                <select name="artworkType" required style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14,appearance:'none'}}>
-                  <option value="" disabled selected>Artwork Type</option>
+              <div className="vmw-commission-grid-4" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
+                <select name="artworkType" required style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16,appearance:'none'}}>
+                  <option value="" disabled defaultValue="">Artwork Type</option>
                   <option value="idol">Idol / Vigraham</option>
                   <option value="crown">Crown / Kireedam</option>
                   <option value="prabhavali">Prabhavali</option>
                   <option value="other">Other</option>
                 </select>
-                <select name="metal" required style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14,appearance:'none'}}>
-                  <option value="" disabled selected>Preferred Metal</option>
+                <select name="metal" required style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16,appearance:'none'}}>
+                  <option value="" disabled defaultValue="">Preferred Metal</option>
                   <option value="gold">24K Gold</option>
                   <option value="silver">Silver</option>
                   <option value="panchaloha">Panchaloha</option>
                   <option value="brass">Brass</option>
                 </select>
-                <input name="budget" placeholder="Budget Estimate" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
-                <input name="timeline" placeholder="Expected Timeline (e.g., 3 months)" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+                <input name="budget" placeholder="Budget Estimate" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
+                <input name="timeline" placeholder="Timeline (e.g. 3 months)" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
               </div>
-              <textarea name="description" required placeholder="Project Description & Temple Details (Dimensions, specifications, history)..." rows={4} style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14,resize:'vertical'}}/>
+              <textarea name="description" required placeholder="Project Description — temple name, deity, dimensions, specifications..." rows={4} style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16,resize:'vertical'}}/>
               
-              <div style={{display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:C.isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)', border:`1px dashed ${C.border}`, borderRadius:8}}>
+              <div style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',background:C.isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)',border:`1px dashed ${C.border}`,borderRadius:8}}>
                 <div style={{fontSize:20}}>📎</div>
-                <div style={{flex:1}}>
-                  <div style={{...ff.body, fontSize:13, color:C.text, fontWeight:600}}>Attach Reference Images</div>
-                  <div style={{...ff.body, fontSize:11, color:C.dim}}>Upload sketches or existing idols (Max 3 files)</div>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{...ff.body,fontSize:13,color:C.text,fontWeight:600}}>Reference Images</div>
+                  <div style={{...ff.body,fontSize:11,color:C.dim}}>Sketches or existing idols (Max 3)</div>
                 </div>
-                <input type="file" multiple accept="image/*" style={{width:100, fontSize:11, color:C.dim}}/>
+                <input type="file" multiple accept="image/*" style={{width:90,fontSize:11,color:C.dim}}/>
               </div>
               
               <button type="submit" disabled={submitting}
-                style={{marginTop:10,padding:'16px',background:C.goldGrad,color:'#000',border:'none',borderRadius:8,...ff.body,fontSize:14,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',cursor:submitting?'not-allowed':'pointer'}}>
-                {submitting ? 'Connecting to Supabase...' : 'Submit Commission Request'}
+                style={{padding:'16px',background:C.goldGrad,color:'#000',border:'none',borderRadius:8,...ff.body,fontSize:14,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',cursor:submitting?'not-allowed':'pointer',touchAction:'manipulation'}}>
+                {submitting ? 'Submitting…' : 'Submit Commission Request'}
               </button>
             </form>
           </>
         ) : (
-          <div style={{padding:60,textAlign:'center'}}>
-            <motion.div initial={{scale:0}} animate={{scale:1, rotate:360}} transition={{type:'spring', stiffness:200, damping:20}} style={{fontSize:60,marginBottom:20}}>✨</motion.div>
-            <h2 style={{...ff.display,fontSize:28,color:C.gold,margin:'0 0 16px 0'}}>Commission Received</h2>
-            <p style={{...ff.body,fontSize:16,color:C.dim,lineHeight:1.6}}>Our master craftsmen will review your sacred project and contact you shortly.</p>
-            <div style={{display:'flex',gap:16,justifyContent:'center',marginTop:32}}>
-              <button onClick={onClose} style={{padding:'14px 32px',background:C.goldGrad,border:'none',color:'#000',borderRadius:30,...ff.body,fontSize:12,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',cursor:'pointer'}}>Close Window</button>
-            </div>
+          <div style={{padding:'48px 24px',textAlign:'center'}}>
+            <motion.div initial={{scale:0}} animate={{scale:1,rotate:360}} transition={{type:'spring',stiffness:200,damping:20}} style={{fontSize:56,marginBottom:16}}>✨</motion.div>
+            <h2 style={{...ff.display,fontSize:26,color:C.gold,margin:'0 0 12px 0'}}>Commission Received</h2>
+            <p style={{...ff.body,fontSize:15,color:C.dim,lineHeight:1.6}}>Our master craftsmen will review your project and contact you shortly.</p>
+            <button onClick={onClose} style={{marginTop:28,padding:'14px 32px',background:C.goldGrad,border:'none',color:'#000',borderRadius:30,...ff.body,fontSize:12,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',cursor:'pointer',touchAction:'manipulation'}}>Close</button>
           </div>
         )}
       </motion.div>
@@ -6050,17 +6216,19 @@ const AuthModal = ({ onClose, action }) => {
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(30px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
+      style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 0 }}
       onClick={onClose}
     >
       <motion.div
-        initial={{ scale: 0.95, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.98, opacity: 0, y: 15 }}
-        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
+        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 28, stiffness: 220 }}
         onClick={e => e.stopPropagation()}
-        style={{ width: 'min(400px, 100vw)', border: '1px solid rgba(255,215,0,0.2)', background: 'linear-gradient(180deg, rgba(20,16,10,0.98) 0%, rgba(10,8,6,0.98) 100%)', borderRadius: 24, overflow: 'hidden', boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }}
+        style={{ width: '100%', maxWidth: 420, border: '1px solid rgba(255,215,0,0.2)', background: 'linear-gradient(180deg, rgba(20,16,10,0.99) 0%, rgba(10,8,6,0.99) 100%)', borderRadius: '24px 24px 0 0', overflow: 'hidden', boxShadow: '0 -24px 60px rgba(0,0,0,0.9)', paddingBottom: 'env(safe-area-inset-bottom,0px)' }}
       >
         <div style={{ padding: '40px 32px 20px', textAlign: 'center', position: 'relative' }}>
-          <button onClick={onClose} style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.05)', border: 'none', color: 'rgba(255,255,255,0.6)', width: 32, height: 32, borderRadius: '50%', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
+          {/* Drag handle */}
+          <div style={{ width:36, height:4, background:'rgba(255,215,0,0.25)', borderRadius:2, margin:'-24px auto 20px' }}/>
+          <button onClick={onClose} style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.05)', border: 'none', color: 'rgba(255,255,255,0.6)', width: 36, height: 36, borderRadius: '50%', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'manipulation' }}>×</button>
           <div style={{ fontSize: 42, marginBottom: 16, filter: 'drop-shadow(0 0 12px rgba(255,215,0,0.4))' }}>✨</div>
           <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 24, color: 'rgba(255,215,0,0.95)', margin: '0 0 8px 0', letterSpacing: '0.05em' }}>
             {isLogin ? 'Sign In' : 'Create Account'}
@@ -6072,8 +6240,8 @@ const AuthModal = ({ onClose, action }) => {
         <div style={{ padding: '0 32px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {error && <div style={{ color: '#ff4444', fontSize: 13, textAlign: 'center' }}>{error}</div>}
-            <input type="email" required placeholder="Email Address" value={email} onChange={e=>setEmail(e.target.value)} style={{ width: '100%', padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontFamily: "'Jost', sans-serif", fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
-            <input type="password" required placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} style={{ width: '100%', padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontFamily: "'Jost', sans-serif", fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+            <input type="email" required placeholder="Email Address" value={email} onChange={e=>setEmail(e.target.value)} style={{ width: '100%', padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontFamily: "'Jost', sans-serif", fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
+            <input type="password" required placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} style={{ width: '100%', padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontFamily: "'Jost', sans-serif", fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
             <motion.button disabled={loading} whileHover={loading ? {} : { scale: 1.02 }} whileTap={loading ? {} : { scale: 0.98 }} type="submit" style={{ width: '100%', padding: '16px 24px', background: loading ? 'rgba(255,215,0,0.5)' : 'linear-gradient(135deg, rgba(255,215,0,0.9) 0%, rgba(200,150,0,1) 100%)', color: '#000', border: 'none', borderRadius: 12, fontFamily: "'Jost', sans-serif", fontSize: 14, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', marginTop: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               {loading ? 'Authenticating...' : (isLogin ? 'Sign In' : 'Create Account')}
             </motion.button>

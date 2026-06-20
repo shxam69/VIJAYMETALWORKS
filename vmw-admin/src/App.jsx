@@ -76,7 +76,7 @@ const useIsMobile = () => {
   const [mobile, setMobile] = useState(window.innerWidth < 768);
   useEffect(() => {
     const h = () => setMobile(window.innerWidth < 768);
-    window.addEventListener('resize', h);
+    window.addEventListener('resize', h, { passive: true });
     return () => window.removeEventListener('resize', h);
   }, []);
   return mobile;
@@ -98,32 +98,57 @@ const injectAdminCSS = () => {
   s.id = 'vmw-admin-css';
   s.textContent = `
     *,*::before,*::after{box-sizing:border-box}
-    html,body{margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-    body{background:#0a0806;color:rgba(255,255,255,0.92);font-family:'Jost',sans-serif;overflow-x:hidden}
+    html,body{margin:0;padding:0;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+    body{background:#0a0806;color:rgba(255,255,255,0.92);font-family:'Jost',sans-serif}
     ::-webkit-scrollbar{width:4px;height:4px}
     ::-webkit-scrollbar-track{background:#0a0806}
     ::-webkit-scrollbar-thumb{background:rgba(255,215,0,0.3);border-radius:2px}
-    .vmw-sidebar{width:240px;transition:transform 0.3s ease}
+    button,a{touch-action:manipulation}
+    input,textarea,select{font-size:16px!important;font-family:'Jost',sans-serif} /* prevents iOS auto-zoom on focus */
+
+    /* Sidebar — desktop sticky */
+    .vmw-sidebar{width:220px;flex-shrink:0;transition:transform 0.3s ease}
+
+    /* Tablet (768px – 1024px): narrower sidebar */
+    @media(max-width:1024px) and (min-width:768px){
+      .vmw-sidebar{width:190px}
+      .vmw-main-content{padding:24px 20px!important}
+      .vmw-stat-grid{grid-template-columns:repeat(2,1fr)!important}
+      .vmw-gallery-grid{grid-template-columns:repeat(2,1fr)!important}
+      .vmw-analytics-row{grid-template-columns:1fr!important}
+    }
+
+    /* Mobile (≤767px): off-canvas sidebar */
     @media(max-width:767px){
-      .vmw-sidebar{position:fixed;top:0;left:0;height:100vh;z-index:300;transform:translateX(-100%)}
+      .vmw-sidebar{position:fixed;top:0;left:0;height:100dvh;height:100vh;z-index:300;transform:translateX(-100%);width:260px}
       .vmw-sidebar.open{transform:translateX(0)}
       .vmw-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:299;display:none}
       .vmw-overlay.open{display:block}
-      .vmw-main-content{padding:20px 16px!important;max-width:100vw!important}
-      .vmw-stat-grid{grid-template-columns:repeat(2,1fr)!important}
-      .vmw-gallery-grid{grid-template-columns:repeat(2,1fr)!important}
+      .vmw-main-content{padding:16px 14px!important;max-width:100vw!important}
+      .vmw-stat-grid{grid-template-columns:repeat(2,1fr)!important;gap:10px!important}
+      .vmw-gallery-grid{grid-template-columns:repeat(2,1fr)!important;gap:10px!important}
       .vmw-upload-fields{grid-template-columns:1fr!important}
       .vmw-edit-2col{grid-template-columns:1fr!important}
       .vmw-inquiries-meta{grid-template-columns:1fr 1fr!important}
       .vmw-chart{height:80px!important}
       .vmw-analytics-row{grid-template-columns:1fr!important}
-      .vmw-page-header{flex-direction:column;align-items:flex-start!important;gap:12px!important}
-      .vmw-modal-inner{padding:20px!important;max-width:calc(100vw - 32px)!important}
+      .vmw-page-header{flex-direction:column;align-items:flex-start!important;gap:10px!important}
+      .vmw-modal-inner{padding:18px!important;max-width:calc(100vw - 24px)!important;width:calc(100vw - 24px)!important}
+      .vmw-site-images-grid{grid-template-columns:repeat(2,1fr)!important}
     }
+
+    /* Small mobile (≤420px) */
     @media(max-width:420px){
-      .vmw-stat-grid{grid-template-columns:1fr!important}
-      .vmw-gallery-grid{grid-template-columns:1fr!important}
+      .vmw-stat-grid{grid-template-columns:1fr 1fr!important}
+      .vmw-gallery-grid{grid-template-columns:repeat(2,1fr)!important}
+      .vmw-site-images-grid{grid-template-columns:1fr 1fr!important}
     }
+
+    /* Backdrop-filter fallback for older Android */
+    @supports not (backdrop-filter: blur(1px)){
+      .vmw-overlay{background:rgba(0,0,0,0.85)!important}
+    }
+
     .vmw-btn{transition:opacity 0.2s,transform 0.1s}
     .vmw-btn:active{transform:scale(0.97)}
     img{max-width:100%;height:auto}
@@ -172,7 +197,7 @@ const StatCard = ({ icon, label, value, sub, accent, color }) => (
 const inpStyle = {
   padding: '11px 13px', background: 'rgba(255,255,255,0.06)',
   border: `1px solid ${C.border}`, borderRadius: 10, color: C.text,
-  fontSize: 14, outline: 'none', fontFamily: "'Jost', sans-serif",
+  fontSize: 16, outline: 'none', fontFamily: "'Jost', sans-serif",
   width: '100%', boxSizing: 'border-box',
 };
 
@@ -227,9 +252,9 @@ const Login = ({ onLogin }) => {
         </div>
         <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <input type="email" placeholder="Admin email" value={email} onChange={e => setEmail(e.target.value)}
-            required style={inpStyle} />
+            required style={{ ...inpStyle, fontSize: 16 }} />
           <input type="password" placeholder="Password" value={password} onChange={e => setPassword(e.target.value)}
-            required style={inpStyle} />
+            required style={{ ...inpStyle, fontSize: 16 }} />
           {error && (
             <div style={{ ...ff.body, fontSize: 13, color: C.red, padding: '10px 14px',
               background: 'rgba(255,77,77,0.1)', borderRadius: 8 }}>{error}</div>
@@ -738,7 +763,7 @@ const GalleryTab = () => {
           {items.length === 0 ? 'No photos yet. Upload your first one above.' : `No photos in "${filterCat}" category.`}
         </div>
       ) : (
-        <div className="vmw-gallery-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 16 }}>
+        <div className="vmw-gallery-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(200px, 100%), 1fr))', gap: 14 }}>
           {visibleItems.map(item => (
             <motion.div key={item.id} layout
               style={{ background: C.surface, border: `1px solid ${item.is_featured ? C.borderGold : C.border}`,
@@ -1447,7 +1472,8 @@ const SiteImagesTab = () => {
       {loading ? (
         <div style={{ textAlign: 'center', padding: 60, color: C.dim, ...ff.body }}>Loading…</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 18 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(240px, 100%), 1fr))', gap: 18 }}
+          className="vmw-site-images-grid">
           {visibleSlots.map(slot => {
             const currentUrl = siteImages[slot.id] || slot.fallback;
             const pendingPreview = preview[slot.id];
@@ -1908,7 +1934,8 @@ const Dashboard = ({ user, onLogout }) => {
       {/* Sidebar */}
       <div className={`vmw-sidebar ${sidebarOpen ? 'open' : ''}`}
         style={{ background: C.bg2, borderRight: `1px solid ${C.border}`,
-          flexShrink: 0, height: '100vh',
+          flexShrink: 0,
+          height: '100dvh',
           ...(isMobile ? {} : { position: 'sticky', top: 0 }) }}>
         <SidebarContent />
       </div>
@@ -1933,8 +1960,10 @@ const Dashboard = ({ user, onLogout }) => {
           </div>
         )}
 
-        <div className="vmw-main-content" style={{ flex: 1, padding: isMobile ? '20px 16px' : '36px 44px',
-          overflowY: 'auto', maxWidth: isMobile ? '100vw' : `calc(100vw - 240px)`, boxSizing: 'border-box' }}>
+        <div className="vmw-main-content" style={{ flex: 1, padding: isMobile ? '16px 14px' : '36px 44px',
+          overflowY: 'auto', overflowX: 'hidden',
+          maxWidth: isMobile ? '100vw' : `calc(100vw - 220px)`,
+          minWidth: 0, boxSizing: 'border-box' }}>
           <AnimatePresence mode="wait">
             <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}>
