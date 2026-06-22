@@ -2057,20 +2057,19 @@ const Legacy = () => {
 
         {/* STATS — gold shine on hover */}
         <style>{`
-          .stat-card { position:relative; overflow:hidden; transition:all 0.4s cubic-bezier(0.16,1,0.3,1); cursor:default; }
-          .stat-card::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(255,215,0,0) 0%,rgba(255,215,0,0.06) 50%,rgba(255,215,0,0) 100%); opacity:0; transition:opacity 0.4s; }
-          .stat-card:hover::before { opacity:1; }
-          .stat-number { transition:all 0.35s cubic-bezier(0.16,1,0.3,1); }
-          .stat-card:hover .stat-number {
-            color:#FFD700 !important;
-            text-shadow:0 0 40px rgba(255,215,0,0.6), 0 0 80px rgba(255,215,0,0.3), 0 2px 8px rgba(0,0,0,0.8) !important;
-            transform:scale(1.08);
-          }
-          .stat-label { transition:color 0.35s; }
-          .stat-card:hover .stat-label { color:rgba(255,215,0,0.75) !important; }
+          .stat-card{position:relative;overflow:hidden;transition:all 0.4s cubic-bezier(0.16,1,0.3,1);cursor:default}
+          .stat-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,215,0,0) 0%,rgba(255,215,0,0.06) 50%,rgba(255,215,0,0) 100%);opacity:0;transition:opacity 0.4s}
+          @media(hover:hover){.stat-card:hover::before{opacity:1}}
+          .stat-number{transition:all 0.35s cubic-bezier(0.16,1,0.3,1)}
+          @media(hover:hover){.stat-card:hover .stat-number{color:#FFD700!important;text-shadow:0 0 40px rgba(255,215,0,0.6),0 2px 8px rgba(0,0,0,0.8)!important;transform:scale(1.08)}}
+          .stat-label{transition:color 0.35s}
+          @media(hover:hover){.stat-card:hover .stat-label{color:rgba(255,215,0,0.75)!important}}
+          /* Stats grid — 4col desktop, 2col mobile */
+          .vmw-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px}
+          @media(max-width:768px){.vmw-stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:2px!important}}
         `}</style>
 
-        <StaggerContainer stagger={0.13} delay={0.1} style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:2}}>
+        <StaggerContainer stagger={0.13} delay={0.1} className="vmw-stats-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:2}}>
           {stats.map((s,i)=>{
             const Item = i % 2 === 0 ? StaggerItemLeft : StaggerItemRight;
             return (
@@ -2080,7 +2079,7 @@ const Legacy = () => {
                   onMouseEnter={()=>setHoveredStat(s.l)}
                   onMouseLeave={()=>setHoveredStat(null)}
                   style={{
-                    padding:'52px 30px 48px',
+                    padding:'clamp(24px,4vw,52px) clamp(12px,2.5vw,30px)',
                     border:`1px solid ${hoveredStat===s.l ? 'rgba(255,215,0,0.4)' : C.border}`,
                     textAlign:'center',
                     background: hoveredStat===s.l ? C.surfaceWarm : 'transparent',
@@ -2088,16 +2087,16 @@ const Legacy = () => {
                     transform: hoveredStat===s.l ? 'translateY(-6px)' : 'none',
                   }}
                 >
-                  <div style={{fontSize:22,marginBottom:14,opacity:hoveredStat===s.l?1:0.4,transition:'opacity 0.3s'}}>{s.icon}</div>
+                  <div style={{fontSize:20,marginBottom:10,opacity:hoveredStat===s.l?1:0.4,transition:'opacity 0.3s'}}>{s.icon}</div>
                   <div
                     className="stat-number"
                     style={{
                       ...ff.display,
-                      fontSize:'clamp(52px,5.5vw,76px)',
+                      fontSize:'clamp(36px,7vw,76px)',
                       color: hoveredStat===s.l ? '#FFD700' : C.text,
                       fontWeight:700,
                       lineHeight:1,
-                      marginBottom:14,
+                      marginBottom:12,
                       display:'block',
                     }}
                   >{s.n}</div>
@@ -2360,8 +2359,7 @@ const Showcase = () => {
                 borderTop:v==='top'?`1px solid ${C.borderHi}`:'none',borderBottom:v==='bottom'?`1px solid ${C.borderHi}`:'none',
                 borderLeft:h==='left'?`1px solid ${C.borderHi}`:'none',borderRight:h==='right'?`1px solid ${C.borderHi}`:'none',opacity:.5}}/>
             ))}
-            <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.02) 0%,transparent 68%)`}}/>
-            <div style={{height:540,border:`1px solid ${C.border}`,background:C.bg2,position:'relative',zIndex:1,overflow:'hidden'}}>
+            <div style={{position:'relative',zIndex:1,overflow:'hidden'}}>
               <CraftworkPanel/>
               <div style={{position:'absolute',bottom:0,left:0,right:0,height:90,background:`linear-gradient(to top,${C.bg1},transparent)`,pointerEvents:'none'}}/>
             </div>
@@ -2522,135 +2520,94 @@ const ProcessSection = () => {
         </Reveal>
 
         {/* Timeline container */}
-        <div style={{position:'relative'}}>
+        <style>{`
+          /* Desktop — alternating left/right timeline */
+          .vmw-process-step{display:grid;grid-template-columns:1fr 80px 1fr;align-items:center;gap:0;margin-bottom:48px;position:relative;z-index:1}
+          .vmw-process-spine{position:absolute;left:50%;top:40px;bottom:40px;width:1px;background:linear-gradient(to bottom,transparent 0%,rgba(255,215,0,0.3) 12%,rgba(255,215,0,0.2) 88%,transparent 100%);transform:translateX(-50%);z-index:0}
+          .vmw-process-fill{position:absolute;left:50%;top:40px;width:2px;background:linear-gradient(180deg,#CC9900 0%,#FFD700 100%);transform:translateX(-50%);z-index:0;box-shadow:0 0 12px rgba(255,215,0,0.4)}
 
-          {/* Central vertical spine */}
-          <div style={{
-            position:'absolute', left:'50%', top:40, bottom:40,
-            width:1,
-            background:`linear-gradient(to bottom, transparent 0%, ${C.gold}40 12%, ${C.gold}28 88%, transparent 100%)`,
-            transform:'translateX(-50%)',
-            zIndex:0,
-          }}/>
-          
+          /* Mobile — simple vertical card list, spine hidden */
+          @media(max-width:768px){
+            .vmw-process-step{
+              display:flex!important;
+              flex-direction:column!important;
+              align-items:stretch!important;
+              gap:0!important;
+              margin-bottom:16px!important;
+            }
+            .vmw-process-spine,.vmw-process-fill{display:none!important}
+            .vmw-process-node-col{order:-1;display:flex;align-items:center;gap:12px;padding:16px 16px 0}
+            .vmw-process-content-col{padding:12px 16px 16px!important}
+            .vmw-process-img-col{display:none!important}
+            .vmw-process-step-card{border-radius:10px!important;padding:16px 18px!important}
+          }
+        `}</style>
+        <div style={{position:'relative'}}>
+          <div className="vmw-process-spine"/>
           <motion.div
+            className="vmw-process-fill"
             initial={{ height: 0 }}
             whileInView={{ height: '100%' }}
             viewport={{ once: true, margin: '-20%' }}
             transition={{ duration: 2.5, ease: 'easeInOut' }}
-            style={{
-              position:'absolute', left:'50%', top:40,
-              width:2,
-              background:C.goldGrad,
-              transform:'translateX(-50%)',
-              zIndex:0,
-              boxShadow: `0 0 12px ${C.gold}66`
-            }}
           />
 
           {steps.map((step, i) => {
-            const isLeft = i % 2 === 0; // even = content left, image right
+            const isLeft = i % 2 === 0;
             return (
               <motion.div
                 key={step.n}
+                className="vmw-process-step"
                 initial={{ opacity:0, x: isLeft ? -48 : 48 }}
                 whileInView={{ opacity:1, x:0 }}
                 viewport={{ once:false, margin:'-60px' }}
                 transition={{ duration:0.78, delay:0.06, ease:[0.16,1,0.3,1] }}
-                style={{
-                  display:'grid',
-                  gridTemplateColumns:'1fr 80px 1fr',
-                  alignItems:'center',
-                  gap:0,
-                  marginBottom: i < steps.length - 1 ? 48 : 0,
-                  position:'relative', zIndex:1,
-                }}
               >
-                {/* Left cell — content or image depending on index */}
-                <div className={isLeft ? "vmw-process-content" : "vmw-process-img"} style={{
+                {/* Left cell */}
+                <div className={isLeft ? "vmw-process-content-col" : "vmw-process-img-col"} style={{
                   padding: isLeft ? '0 44px 0 0' : '0 44px 0 0',
-                  gridColumn: 1,
-                  gridRow: 1,
-                  display: 'flex', justifyContent: 'flex-end', width: '100%'
+                  gridColumn: 1, gridRow: 1,
+                  display:'flex', justifyContent:'flex-end', width:'100%'
                 }}>
                   {isLeft ? (
-                    /* Content block */
-                    <motion.div
-                      whileHover={{ x:-4 }}
-                      transition={{ duration:.28 }}
-                      style={{
-                        padding:'36px 40px',
-                        background: C.surfaceWarm,
-                        border:`1px solid ${C.border}`,
-                        backdropFilter:'blur(8px)',
-                        position:'relative',
-                        overflow:'hidden',
-                      }}
-                    >
-                      {/* Top gold accent line */}
+                    <motion.div className="vmw-process-step-card" whileHover={{ x:-4 }} transition={{ duration:.28 }}
+                      style={{ padding:'36px 40px', background:C.surfaceWarm, border:`1px solid ${C.border}`, backdropFilter:'blur(8px)', position:'relative', overflow:'hidden', width:'100%' }}>
                       <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,${C.gold}66,transparent)`}}/>
                       <div style={{...ff.body,fontSize:7.5,letterSpacing:'.48em',color:C.gold,fontWeight:700,textTransform:'uppercase',marginBottom:12,opacity:.8}}>Step {step.n}</div>
-                      <div style={{...ff.display,fontSize:'clamp(18px,2vw,24px)',color:C.text,fontWeight:700,letterSpacing:'.04em',marginBottom:14,lineHeight:1.1}}>{step.title}</div>
+                      <div style={{...ff.display,fontSize:'clamp(16px,2vw,24px)',color:C.text,fontWeight:700,letterSpacing:'.04em',marginBottom:14,lineHeight:1.2}}>{step.title}</div>
                       <GoldRule w="40px" opacity={.45}/>
                       <div style={{...ff.body,fontSize:13,lineHeight:1.95,color:C.dim,fontWeight:300,marginTop:14}}>{step.desc}</div>
                     </motion.div>
                   ) : (
-                    /* Image placeholder / real photo */
                     <ProcessTimelineImage src={step.img} alt={step.title} C={C}/>
                   )}
                 </div>
 
-                {/* Centre — step node */}
-                <div className="vmw-process-node" style={{
-                  gridColumn:2, gridRow:1,
-                  display:'flex', justifyContent:'center', alignItems:'center',
-                  zIndex:2, position:'relative',
-                }}>
-                  {/* Node glow */}
+                {/* Centre node */}
+                <div className="vmw-process-node-col" style={{ gridColumn:2, gridRow:1, display:'flex', justifyContent:'center', alignItems:'center', zIndex:2, position:'relative' }}>
                   <motion.div
-                    animate={{ boxShadow:[
-                      `0 0 0 0 rgba(255,215,0,0)`,
-                      `0 0 18px 6px rgba(255,215,0,0.18)`,
-                      `0 0 0 0 rgba(255,215,0,0)`,
-                    ]}}
+                    animate={{ boxShadow:[`0 0 0 0 rgba(255,215,0,0)`,`0 0 18px 6px rgba(255,215,0,0.18)`,`0 0 0 0 rgba(255,215,0,0)`] }}
                     transition={{ duration:3.2, repeat:Infinity, ease:'easeInOut', delay:i*0.5 }}
                     style={{borderRadius:'50%'}}
                   >
-                    <ProcessIcon
-                      n={step.n} icon={step.icon}
-                      gold={C.gold} dim={C.dim}
-                      border={C.borderGold} surfaceGold={C.surfaceGold}
-                    />
+                    <ProcessIcon n={step.n} icon={step.icon} gold={C.gold} dim={C.dim} border={C.borderGold} surfaceGold={C.surfaceGold}/>
                   </motion.div>
                 </div>
 
                 {/* Right cell */}
-                <div className={isLeft ? "vmw-process-img" : "vmw-process-content"} style={{
-                  padding: isLeft ? '0 0 0 44px' : '0 0 0 44px',
-                  gridColumn: 3,
-                  gridRow: 1,
-                  display: 'flex', justifyContent: 'flex-start', width: '100%'
+                <div className={isLeft ? "vmw-process-img-col" : "vmw-process-content-col"} style={{
+                  padding: '0 0 0 44px',
+                  gridColumn: 3, gridRow: 1,
+                  display:'flex', justifyContent:'flex-start', width:'100%'
                 }}>
                   {isLeft ? (
-                    /* Image side */
                     <ProcessTimelineImage src={step.img} alt={step.title} C={C}/>
                   ) : (
-                    /* Content block */
-                    <motion.div
-                      whileHover={{ x:4 }}
-                      transition={{ duration:.28 }}
-                      style={{
-                        padding:'36px 40px',
-                        background: C.surfaceWarm,
-                        border:`1px solid ${C.border}`,
-                        backdropFilter:'blur(8px)',
-                        position:'relative',
-                        overflow:'hidden',
-                      }}
-                    >
-                      <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,transparent,${C.gold}66)`}}/>
+                    <motion.div className="vmw-process-step-card" whileHover={{ x:4 }} transition={{ duration:.28 }}
+                      style={{ padding:'36px 40px', background:C.surfaceWarm, border:`1px solid ${C.border}`, backdropFilter:'blur(8px)', position:'relative', overflow:'hidden', width:'100%' }}>
+                      <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,${C.gold}66,transparent)`}}/>
                       <div style={{...ff.body,fontSize:7.5,letterSpacing:'.48em',color:C.gold,fontWeight:700,textTransform:'uppercase',marginBottom:12,opacity:.8}}>Step {step.n}</div>
-                      <div style={{...ff.display,fontSize:'clamp(18px,2vw,24px)',color:C.text,fontWeight:700,letterSpacing:'.04em',marginBottom:14,lineHeight:1.1}}>{step.title}</div>
+                      <div style={{...ff.display,fontSize:'clamp(16px,2vw,24px)',color:C.text,fontWeight:700,letterSpacing:'.04em',marginBottom:14,lineHeight:1.2}}>{step.title}</div>
                       <GoldRule w="40px" opacity={.45}/>
                       <div style={{...ff.body,fontSize:13,lineHeight:1.95,color:C.dim,fontWeight:300,marginTop:14}}>{step.desc}</div>
                     </motion.div>
