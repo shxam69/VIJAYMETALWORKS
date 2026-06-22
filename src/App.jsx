@@ -500,6 +500,17 @@ img{image-rendering:auto;-webkit-image-rendering:auto;max-width:100%}
 /* ── Touch-friendly CTA buttons ── */
 .vmw-btn-primary,.vmw-btn-secondary{touch-action:manipulation}
 
+/* ── Reduce GPU compositing on mobile — disable will-change ── */
+@media(max-width:768px){
+  .will-transform{will-change:auto!important}
+  .vmw-btn-primary,.vmw-btn-secondary{will-change:auto!important}
+}
+
+/* ── Content visibility — skip rendering off-screen sections ── */
+@media(max-width:768px){
+  #testimonials,#faq,#archive,#contact{content-visibility:auto;contain-intrinsic-size:0 600px}
+}
+
 /* ── Mobile nav bar — off on desktop ── */
 .vmw-mobile-nav{display:none!important}
 
@@ -744,10 +755,10 @@ const GoldRule = ({ w='100%', my=0, opacity=.14 }) => {
 const EASE_OUT   = [0.16, 1, 0.3, 1];
 const EASE_IN_OUT = [0.45, 0, 0.55, 1];
 
-// Base Reveal — fades up, re-triggers every viewport entry
+// Base Reveal — fades up, triggers once
 const Reveal = ({ children, delay=0, y=24, duration=0.8 }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:false, margin:'-60px' });
+  const inView = useInView(ref, { once:true, margin:'-60px' });
   return (
     <motion.div ref={ref}
       initial={{ opacity:0, y }}
@@ -758,10 +769,10 @@ const Reveal = ({ children, delay=0, y=24, duration=0.8 }) => {
   );
 };
 
-// Slide from left — re-triggers
+// Slide from left — triggers once
 const SlideLeft = ({ children, delay=0, distance=60, duration=0.9 }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:false, margin:'-60px' });
+  const inView = useInView(ref, { once:true, margin:'-60px' });
   return (
     <motion.div ref={ref}
       initial={{ opacity:0, x: -distance }}
@@ -772,10 +783,10 @@ const SlideLeft = ({ children, delay=0, distance=60, duration=0.9 }) => {
   );
 };
 
-// Slide from right — re-triggers
+// Slide from right — triggers once
 const SlideRight = ({ children, delay=0, distance=60, duration=0.9 }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:false, margin:'-60px' });
+  const inView = useInView(ref, { once:true, margin:'-60px' });
   return (
     <motion.div ref={ref}
       initial={{ opacity:0, x: distance }}
@@ -786,10 +797,10 @@ const SlideRight = ({ children, delay=0, distance=60, duration=0.9 }) => {
   );
 };
 
-// Stagger container helper
+// Stagger container helper — triggers once
 const StaggerContainer = ({ children, stagger=0.12, delay=0, className='', style={} }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:false, margin:'-60px' });
+  const inView = useInView(ref, { once:true, margin:'-60px' });
   return (
     <motion.div ref={ref} className={className} style={style}
       initial="hidden"
@@ -811,10 +822,10 @@ const StaggerItem = ({ children, y=28, duration=0.8, style={}, className='' }) =
   </motion.div>
 );
 
-// Soft zoom in (for logo / featured panels)
+// Soft zoom in — triggers once
 const ZoomIn = ({ children, delay=0, scale=0.88, duration=0.9, style={} }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:false, margin:'-60px' });
+  const inView = useInView(ref, { once:true, margin:'-60px' });
   return (
     <motion.div ref={ref} style={style}
       initial={{ opacity:0, scale }}
@@ -825,10 +836,10 @@ const ZoomIn = ({ children, delay=0, scale=0.88, duration=0.9, style={} }) => {
   );
 };
 
-// Fade in (simple opacity, used for footer etc.)
+// Fade in — triggers once
 const FadeIn = ({ children, delay=0, duration=0.9, style={}, className='' }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:false, margin:'-40px' });
+  const inView = useInView(ref, { once:true, margin:'-40px' });
   return (
     <motion.div ref={ref} style={style} className={className}
       initial={{ opacity:0 }}
@@ -842,7 +853,7 @@ const FadeIn = ({ children, delay=0, duration=0.9, style={}, className='' }) => 
 // Slide from bottom (used for cards, CTAs)
 const SlideUp = ({ children, delay=0, distance=40, duration=0.85, style={} }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:false, margin:'-50px' });
+  const inView = useInView(ref, { once:true, margin:'-50px' });
   return (
     <motion.div ref={ref} style={style}
       initial={{ opacity:0, y: distance }}
@@ -1087,6 +1098,8 @@ const CurvyButton = ({ children, onClick, primary=false, style={} }) => {
   }, []);
 
   useEffect(() => {
+    // Skip magnetic effect on touch devices — saves RAF calls per button
+    if (window.matchMedia('(hover: none)').matches) return;
     window.addEventListener('mousemove', handleMouseMove, { passive: true });
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
@@ -1137,24 +1150,26 @@ const SectionCTA = ({ primary="Commission a Piece", secondary="View Gallery", on
 const CanvasBg = () => {
   const C = useTheme();
   const ref = useRef(null);
+  // Disable canvas on mobile — saves significant CPU/battery
+  const isMobileDevice = typeof window !== 'undefined' && window.innerWidth <= 768;
   useEffect(() => {
+    if (isMobileDevice) return;
     const canvas = ref.current;
+    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let W = canvas.width = window.innerWidth;
     let H = canvas.height = window.innerHeight;
-    // Reduced from 28 to 14 particles for performance
-    const particles = Array.from({ length: 14 }, () => ({
+    const particles = Array.from({ length: 10 }, () => ({
       x: Math.random()*W, y: Math.random()*H,
-      vx:(Math.random()-.5)*.08, vy:(Math.random()-.5)*.08,
-      r: Math.random()*.6+.2, o: Math.random()*.12+.03
+      vx:(Math.random()-.5)*.06, vy:(Math.random()-.5)*.06,
+      r: Math.random()*.5+.2, o: Math.random()*.08+.02
     }));
     let raf;
     let frame = 0;
     const draw = () => {
       raf = requestAnimationFrame(draw);
       frame++;
-      // Only redraw every 2 frames (30fps instead of 60fps)
-      if (frame % 2 !== 0) return;
+      if (frame % 3 !== 0) return; // ~20fps — enough for ambient effect
       ctx.clearRect(0,0,W,H);
       particles.forEach(p => {
         ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
@@ -1166,17 +1181,22 @@ const CanvasBg = () => {
     };
     draw();
     const onResize = () => { W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight; };
-    window.addEventListener('resize',onResize);
+    window.addEventListener('resize',onResize,{passive:true});
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize',onResize); };
-  }, []);
-  return <canvas ref={ref} style={{ position:'fixed', inset:0, zIndex:0, pointerEvents:'none', opacity:.15 }}/>;
+  }, [isMobileDevice]);
+  if (isMobileDevice) return null;
+  return <canvas ref={ref} style={{ position:'fixed', inset:0, zIndex:0, pointerEvents:'none', opacity:.12 }}/>;
 };
 
-const Grain = () => (
-  <div style={{ position:'fixed', inset:0, zIndex:1, pointerEvents:'none', opacity:.025,
-    backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-    backgroundRepeat:'repeat', backgroundSize:'256px 256px' }}/>
-);
+const Grain = () => {
+  // Disabled on mobile — saves GPU compositing layer
+  if (typeof window !== 'undefined' && window.innerWidth <= 768) return null;
+  return (
+    <div style={{ position:'fixed', inset:0, zIndex:1, pointerEvents:'none', opacity:.025,
+      backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+      backgroundRepeat:'repeat', backgroundSize:'256px 256px' }}/>
+  );
+};
 
 /* ═══════════════════════════════════════════════════════════════
    CRAFTWORK IMAGE PANEL — replaces 3D model (no external deps)
@@ -1947,11 +1967,11 @@ const Hero = () => {
   const navigate = useNavigate();
   const { setShowCommissionModal } = useAppCtx();
   const ref = useRef(null);
-  const { scrollYProgress } = useScroll({ target:ref, offset:['start start','end start'] });
-  // Reduced parallax range for performance
-  const bgY = useTransform(scrollYProgress,[0,1],['0%','12%']);
-  const textY = useTransform(scrollYProgress,[0,1],['0%','6%']);
-  const fade = useTransform(scrollYProgress,[0,.7],[1,0]);
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+  // Disable parallax on mobile — main cause of scroll jank on Android/iOS
+  const { scrollYProgress } = useScroll({ target: isMobile ? undefined : ref, offset:['start start','end start'] });
+  const textY = useTransform(scrollYProgress,[0,1], isMobile ? ['0%','0%'] : ['0%','6%']);
+  const fade  = useTransform(scrollYProgress,[0,.7], isMobile ? [1,1]         : [1,0]);
   return (
     <section id="home" ref={ref} className="vmw-hero" style={{position:'relative',height:'100svh',minHeight:'100svh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',overflow:'hidden',paddingTop:'env(safe-area-inset-top,0px)'}}>
       {/* Deep luxury black gradient background — no stock photo */}
@@ -1981,7 +2001,7 @@ const Hero = () => {
         </motion.div>
 
         {/* Logo image replacing 3D model with subtle float and glow pulse */}
-        <motion.div initial={{opacity:0,scale:.75}} animate={{opacity:1,scale:1, y:[-8, 8, -8]}} transition={{opacity:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, scale:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, y:{duration:6, repeat:Infinity, ease:"easeInOut"}}}
+        <motion.div initial={{opacity:0,scale:.75}} animate={{opacity:1,scale:1, ...(isMobile ? {} : {y:[-8,8,-8]})}} transition={{opacity:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, scale:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, ...(isMobile ? {} : {y:{duration:6,repeat:Infinity,ease:"easeInOut"}})}}
           style={{width:220,height:220,margin:'0 auto 40px',position:'relative',display:'flex',alignItems:'center',justifyContent:'center'}}>
           <motion.div animate={{opacity:[0.16, 0.3, 0.16], scale:[1, 1.1, 1]}} transition={{duration:4, repeat:Infinity, ease:"easeInOut"}} style={{position:'absolute',inset:'-40%',background:`radial-gradient(circle,rgba(255,200,50,1) 0%,transparent 65%)`,pointerEvents:'none'}}/>
           <div style={{width:180,height:180,borderRadius:'50%',overflow:'hidden',position:'relative',
@@ -2426,27 +2446,33 @@ const RealWorkPhotos = () => {
 const WorkPhotoCard = ({ photo }) => {
   const C = useTheme();
   const [loaded, setLoaded] = useState(false);
-  const [hov, setHov] = useState(false);
+  // No hover state on touch — use CSS hover only
   return (
-    <motion.div onHoverStart={()=>setHov(true)} onHoverEnd={()=>setHov(false)}
-      whileHover={{borderColor:C.borderHi}}
-      style={{position:'relative',overflow:'hidden',aspectRatio:'4/3',border:`1px solid ${C.border}`,cursor:'default',transition:'border-color .3s',background:C.bg1}}>
-      {!loaded && (
-        <div className="skeleton" style={{position:'absolute',inset:0,zIndex:2}}/>
-      )}
-      <motion.img src={photo.img} alt={photo.label} onLoad={()=>setLoaded(true)}
-        animate={{scale:hov?1.06:1,opacity:hov?.95:.85}}
-        transition={{duration:.8,ease:[.16,1,.3,1]}}
-        style={{width:'100%',height:'100%',objectFit:'cover',filter:'sepia(10%)',display:'block'}}/>
-      <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(14,12,10,.88) 0%,transparent 55%)',pointerEvents:'none'}}/>
-      <motion.div animate={{y:hov?0:6,opacity:hov?1:.7}} transition={{duration:.32}}
-        style={{position:'absolute',bottom:0,left:0,right:0,padding:'20px 22px'}}>
-        <div style={{...ff.display,fontSize:15,color:C.text,fontWeight:600,marginBottom:6}}>{photo.label}</div>
-        <div style={{...ff.body,fontSize:9,color:C.dim,letterSpacing:'.08em',lineHeight:1.6}}>{photo.desc}</div>
-      </motion.div>
-      {/* Corner diamond */}
-      <div style={{position:'absolute',top:12,right:12,width:12,height:12,border:`1px solid ${C.borderHi}`,opacity:hov?.5:.18,transition:'opacity .3s',transform:'rotate(45deg)'}}/>
-    </motion.div>
+    <div
+      className="vmw-work-card"
+      style={{position:'relative',overflow:'hidden',aspectRatio:'4/3',border:`1px solid ${C.border}`,cursor:'default',background:C.bg1}}>
+      <style>{`
+        .vmw-work-card img{width:100%;height:100%;object-fit:cover;filter:sepia(10%);display:block;transition:transform .6s ease,opacity .4s ease}
+        .vmw-work-card .vmw-work-overlay{position:absolute;bottom:0;left:0;right:0;padding:16px 18px;transform:translateY(4px);opacity:1;transition:opacity .3s,transform .3s}
+        @media(hover:hover){
+          .vmw-work-card:hover img{transform:scale(1.06)}
+          .vmw-work-card:hover .vmw-work-overlay{opacity:1;transform:translateY(0)}
+        }
+        /* On touch devices — always show overlay at full opacity, no transform */
+        @media(hover:none){
+          .vmw-work-card .vmw-work-overlay{opacity:1!important;transform:none!important}
+          .vmw-work-card img{opacity:0.82}
+        }
+      `}</style>
+      {!loaded && <div className="skeleton" style={{position:'absolute',inset:0,zIndex:2}}/>}
+      <img src={photo.img} alt={photo.label} onLoad={()=>setLoaded(true)}
+        style={{width:'100%',height:'100%',objectFit:'cover',filter:'sepia(10%)',display:'block',opacity:loaded?.85:0}}/>
+      <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(14,12,10,.92) 0%,rgba(14,12,10,.1) 50%,transparent 100%)',pointerEvents:'none'}}/>
+      <div className="vmw-work-overlay">
+        <div style={{...ff.display,fontSize:'clamp(12px,3vw,15px)',color:C.text,fontWeight:600,marginBottom:4}}>{photo.label}</div>
+        <div style={{...ff.body,fontSize:'clamp(8px,2.5vw,9px)',color:C.dim,letterSpacing:'.06em',lineHeight:1.5}}>{photo.desc}</div>
+      </div>
+    </div>
   );
 };
 
@@ -2560,7 +2586,7 @@ const ProcessSection = () => {
                 className="vmw-process-step"
                 initial={{ opacity:0, x: isLeft ? -48 : 48 }}
                 whileInView={{ opacity:1, x:0 }}
-                viewport={{ once:false, margin:'-60px' }}
+                viewport={{ once:true, margin:'-60px' }}
                 transition={{ duration:0.78, delay:0.06, ease:[0.16,1,0.3,1] }}
               >
                 {/* Left cell */}
@@ -2571,7 +2597,7 @@ const ProcessSection = () => {
                 }}>
                   {isLeft ? (
                     <motion.div className="vmw-process-step-card" whileHover={{ x:-4 }} transition={{ duration:.28 }}
-                      style={{ padding:'36px 40px', background:C.surfaceWarm, border:`1px solid ${C.border}`, backdropFilter:'blur(8px)', position:'relative', overflow:'hidden', width:'100%' }}>
+                      style={{ padding:'36px 40px', background:C.surfaceWarm, border:`1px solid ${C.border}`, position:'relative', overflow:'hidden', width:'100%' }}>
                       <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,${C.gold}66,transparent)`}}/>
                       <div style={{...ff.body,fontSize:7.5,letterSpacing:'.48em',color:C.gold,fontWeight:700,textTransform:'uppercase',marginBottom:12,opacity:.8}}>Step {step.n}</div>
                       <div style={{...ff.display,fontSize:'clamp(16px,2vw,24px)',color:C.text,fontWeight:700,letterSpacing:'.04em',marginBottom:14,lineHeight:1.2}}>{step.title}</div>
@@ -2604,7 +2630,7 @@ const ProcessSection = () => {
                     <ProcessTimelineImage src={step.img} alt={step.title} C={C}/>
                   ) : (
                     <motion.div className="vmw-process-step-card" whileHover={{ x:4 }} transition={{ duration:.28 }}
-                      style={{ padding:'36px 40px', background:C.surfaceWarm, border:`1px solid ${C.border}`, backdropFilter:'blur(8px)', position:'relative', overflow:'hidden', width:'100%' }}>
+                      style={{ padding:'36px 40px', background:C.surfaceWarm, border:`1px solid ${C.border}`, position:'relative', overflow:'hidden', width:'100%' }}>
                       <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,${C.gold}66,transparent)`}}/>
                       <div style={{...ff.body,fontSize:7.5,letterSpacing:'.48em',color:C.gold,fontWeight:700,textTransform:'uppercase',marginBottom:12,opacity:.8}}>Step {step.n}</div>
                       <div style={{...ff.display,fontSize:'clamp(16px,2vw,24px)',color:C.text,fontWeight:700,letterSpacing:'.04em',marginBottom:14,lineHeight:1.2}}>{step.title}</div>
@@ -3411,7 +3437,7 @@ const Gallery = ({ isFullPage = false, onSelect, initialSelected = null }) => {
                 style={{ border: `1px solid ${isSelected ? 'rgba(255,215,0,0.35)' : 'rgba(255,255,255,0.07)'}` }}
                 initial={{ opacity:0, y: 48, scale: 0.92 }}
                 whileInView={{ opacity:1, y: 0, scale: 1 }}
-                viewport={{ once:false, margin:'-60px' }}
+                viewport={{ once:true, margin:'-60px' }}
                 transition={{ 
                   duration:0.85, 
                   delay: totalDelay,
@@ -3895,7 +3921,7 @@ const Testimonials = () => {
 
           <AnimatePresence mode="wait">
             <motion.div key={active} initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-22}} transition={{duration:.48,ease:[.16,1,.3,1]}}>
-              <div style={{border:`1px solid ${C.border}`,padding:'52px 56px',background:C.surfaceWarm,position:'relative',backdropFilter:'blur(8px)'}}>
+              <div style={{border:`1px solid ${C.border}`,padding:'52px 56px',background:C.surfaceWarm,position:'relative'}}>
                 {/* Giant quote mark */}
                 <div style={{...ff.display,fontSize:140,color:'rgba(255,255,255,0.04)',opacity:1,position:'absolute',top:4,left:22,lineHeight:1,fontWeight:900,pointerEvents:'none',userSelect:'none'}}>"</div>
                 {/* Stars */}
@@ -4080,7 +4106,7 @@ const Archive = () => {
               className={p.large ? 'vmw-archive-span2 vmw-archive-item' : 'vmw-archive-item'}
               initial={{ opacity:0, y:36 }}
               whileInView={{ opacity:1, y:0 }}
-              viewport={{ once:false, margin:'-50px' }}
+              viewport={{ once:true, margin:'-50px' }}
               transition={{ duration:0.8, delay:pidx*0.1, ease:[0.16,1,0.3,1] }}
               style={{gridColumn:p.large?'span 2':'span 1',gridRow:p.large?'span 2':'span 1',position:'relative',overflow:'hidden',cursor:'default',background:C.bg2,border:`1px solid ${C.border}`}}
               whileHover={{borderColor:C.borderHi}}>
@@ -4667,7 +4693,7 @@ const GalleryPreview = ({ onViewAll }) => {
               key={idol.id}
               initial={{opacity:0, y:30}}
               whileInView={{opacity:1, y:0}}
-              viewport={{once:false, margin:"-50px"}}
+              viewport={{once:true, margin:"-50px"}}
               transition={{duration:0.6, delay:idx*0.1}}
               className="preview-masonry-item"
               onClick={() => { window.scrollTo({top:0,behavior:'instant'}); navigate('/gallery', { state: { activeId: idol.id } }); }}
