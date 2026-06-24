@@ -338,71 +338,6 @@ const logViewEvent = async (idolId, userId) => {
   });
 };
 
-/* ═══════════════════════════════════════════════════════════════
-   SITE IMAGES — admin-controlled image overrides
-   Fetched from `site_images` Supabase table on app load.
-   Falls back to the hardcoded static paths when not overridden.
-═══════════════════════════════════════════════════════════════ */
-const SiteImgCtx = React.createContext({});
-const useSiteImg = () => React.useContext(SiteImgCtx);
-
-// Default static fallbacks — mirrors SITE_IMAGE_SLOTS in admin
-const SITE_IMG_DEFAULTS = {
-  hero_bg:        '/gallery/gold/crown.jpg',
-  craftwork_1:    '/gallery/gold/sadarigold.jpg',
-  craftwork_2:    '/gallery/gold/crown.jpg',
-  craftwork_3:    '/gallery/gold/kanganam4.jpg',
-  craftwork_4:    '/gallery/gold/kandabaranam.jpg',
-  service_gold:   '/gallery/gold/sadarigold.jpg',
-  service_silver: '/gallery/silver/kandabaranam.jpg',
-  service_copper: '/gallery/gold/hand1.jpg',
-  service_pancha: '/gallery/temple/god.jpg',
-  service_vimana: '/gallery/gold/crownn.jpg',
-  service_stone:  '/gallery/stone/stone1.jpg',
-  legacy_1:       '/gallery/gold/crown.jpg',
-  legacy_2:       '/gallery/gold/crown1.jpg',
-  work_1:         '/gallery/gold/crown.jpg',
-  work_2:         '/gallery/gold/crown1.jpg',
-  work_3:         '/gallery/gold/kanganam4.jpg',
-  work_4:         '/gallery/silver/kandabaranam.jpg',
-  work_5:         '/gallery/gold/kandabaranam.jpg',
-  work_6:         '/gallery/temple/god.jpg',
-  showcase_main:  '/gallery/temple/temple.jpg',
-  process_1:      '/gallery/gold/crown.jpg',
-  process_2:      '/gallery/gold/kandabaranam.jpg',
-  process_3:      '/gallery/stone/stone1.jpg',
-  preview_1:      '/gallery/gold/sadarigold.jpg',
-  preview_2:      '/gallery/gold/crown.jpg',
-  preview_3:      '/gallery/gold/kandabaranam.jpg',
-  preview_4:      '/gallery/gold/crown1.jpg',
-  preview_5:      '/gallery/stone/stone1.jpg',
-  preview_6:      '/gallery/temple/god.jpg',
-};
-
-// Hook — fetches overrides once, merges with defaults
-const useSiteImages = () => {
-  const [imgs, setImgs] = useState({ ...SITE_IMG_DEFAULTS });
-  useEffect(() => {
-    if (!SUPABASE_CONFIG.url || !SUPABASE_CONFIG.key) return;
-    fetch(`${SUPABASE_CONFIG.url}/rest/v1/site_images?select=id,image_url`, {
-      headers: {
-        'apikey': SUPABASE_CONFIG.key,
-        'Authorization': `Bearer ${SUPABASE_CONFIG.key}`,
-      },
-    })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data && Array.isArray(data)) {
-          const overrides = {};
-          data.forEach(row => { overrides[row.id] = row.image_url; });
-          setImgs(prev => ({ ...prev, ...overrides }));
-        }
-      })
-      .catch(() => {}); // fail silently — static fallbacks remain
-  }, []);
-  return imgs;
-};
-
 
 /* ═══════════════════════════════════════════════════════════════
    THEME SYSTEM — light / dark / auto
@@ -452,29 +387,17 @@ let C = THEMES.dark;
 ═══════════════════════════════════════════════════════════════ */
 const buildCSS = (C) => `
 @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400;1,600&family=Jost:wght@300;400;500;600;700&display=swap');
-
-/* ── Reset ── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth}
-body{
-  background:${C.bg1};color:${C.text};
-  font-family:'Jost',sans-serif;
-  overflow-x:hidden;
-  -webkit-font-smoothing:antialiased;
-  -webkit-tap-highlight-color:transparent; /* removes blue flash on Android tap */
-  transition:background .35s,color .35s;
-}
+body{background:${C.bg1};color:${C.text};font-family:'Jost',sans-serif;overflow-x:hidden;-webkit-font-smoothing:antialiased;transition:background .35s,color .35s}
 ::selection{background:${C.gold};color:#fff}
 ::-webkit-scrollbar{width:2px}
 ::-webkit-scrollbar-track{background:${C.bg1}}
 ::-webkit-scrollbar-thumb{background:${C.gold}88}
-input,textarea{font-family:'Jost',sans-serif;color:${C.text};font-size:16px} /* 16px prevents iOS zoom */
+input,textarea{font-family:'Jost',sans-serif;color:${C.text}}
 input::placeholder,textarea::placeholder{color:${C.faint}}
-button{font-family:'Jost',sans-serif;cursor:pointer;touch-action:manipulation}
-a{touch-action:manipulation}
-img{image-rendering:auto;-webkit-image-rendering:auto;max-width:100%}
+button{font-family:'Jost',sans-serif;cursor:pointer}
 
-/* ── Keyframes ── */
 @keyframes starBorderSpin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 @keyframes goldShine{0%{background-position:-200% center}100%{background-position:200% center}}
 @keyframes rippleOut{0%{transform:scale(0);opacity:0.5;border-radius:50%}100%{transform:scale(4);opacity:0;border-radius:50%}}
@@ -487,140 +410,48 @@ img{image-rendering:auto;-webkit-image-rendering:auto;max-width:100%}
 @keyframes logoGlow{0%,100%{opacity:.3}50%{opacity:.9}}
 @keyframes flameFlicker{0%,100%{transform:scaleY(1) skewX(0deg);opacity:.9}30%{transform:scaleY(1.1) skewX(-2deg);opacity:1}60%{transform:scaleY(.95) skewX(1deg);opacity:.8}}
 
-/* ── Utilities ── */
 .will-transform{will-change:transform}
 .skeleton{
   background:linear-gradient(90deg,${C.isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.04)'} 25%,${C.isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.08)'} 50%,${C.isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.04)'} 75%);
   background-size:400px 100%;
   animation:skeletonShimmer 1.6s ease-in-out infinite;
 }
-.vmw-img{background:#0a0806}
-.gold-text,.text-gold{color:#FFD700!important;text-shadow:0 1px 2px rgba(0,0,0,.8);mix-blend-mode:screen}
-
-/* ── Touch-friendly CTA buttons ── */
-.vmw-btn-primary,.vmw-btn-secondary{touch-action:manipulation}
-
-/* ── Reduce GPU compositing on mobile — disable will-change ── */
 @media(max-width:768px){
-  .will-transform{will-change:auto!important}
-  .vmw-btn-primary,.vmw-btn-secondary{will-change:auto!important}
-}
-
-/* ── Content visibility — skip rendering off-screen sections ── */
-@media(max-width:768px){
-  #testimonials,#faq,#archive,#contact{content-visibility:auto;contain-intrinsic-size:0 600px}
-}
-
-/* ── Mobile nav bar — off on desktop ── */
-.vmw-mobile-nav{display:none!important}
-
-/* ── Theme toggle position ── */
-.theme-toggle{right:70px!important}
-@media(max-width:768px){.theme-toggle{display:none!important}}
-
-/* ── Backdrop fallback (older Android) ── */
-@supports not (backdrop-filter:blur(1px)){
-  .vmw-mobile-contact-bar{background:${C.isDark?'rgba(20,18,16,0.99)':'rgba(245,240,232,0.99)'}!important}
-  .nav-desktop{background:${C.isDark?'rgba(8,6,4,0.99)':'rgba(245,240,232,0.99)'}!important}
-}
-
-/* ── Only apply hover effects on pointer devices — no sticky hover on touch ── */
-@media(hover:hover) and (pointer:fine){
-  .vmw-card:hover img{transform:scale(1.06)}
-  .preview-masonry-item:hover{transform:translateY(-4px);border-color:rgba(255,215,0,0.4)}
-  .preview-masonry-item:hover img{transform:scale(1.08)}
-}
-
-/* ════════════════════════════════════════════════
-   DESKTOP (≥1025px) — Full layout
-════════════════════════════════════════════════ */
-@media(min-width:1025px){
-  .nav-desktop{display:flex!important}
-  .vmw-mobile-nav{display:none!important}
-  .mobile-sticky-bar{display:none!important}
-  .section-pad{padding:140px 56px}
-  .two-col{grid-template-columns:1fr 1fr;gap:80px}
-  .preview-masonry{columns:3;column-gap:12px}
-}
-
-/* ════════════════════════════════════════════════
-   TABLET (769px – 1024px) — Windows tablet / iPad landscape
-════════════════════════════════════════════════ */
-@media(max-width:1024px) and (min-width:769px){
-  .nav-desktop{display:flex!important}
-  .vmw-mobile-nav{display:none!important}
-  .mobile-sticky-bar{display:none!important}
-  .section-pad{padding:100px 36px!important}
-  .two-col{grid-template-columns:1fr 1fr!important;gap:44px!important}
-  .vmw-craftwork{height:420px!important}
-  .footer-contact-grid{grid-template-columns:repeat(4,1fr)!important}
-  .preview-masonry{columns:3!important;column-gap:10px!important}  .vmw-services-panel{padding:32px 28px!important}
-  .archive-grid{grid-template-columns:repeat(3,1fr)!important;grid-template-rows:auto!important}
-  .gallery-grid{grid-template-columns:repeat(3,1fr)!important}
-  .theme-toggle{right:70px!important}
-}
-
-/* ════════════════════════════════════════════════
-   MOBILE (≤768px) — Android / iPhone / iPad portrait
-════════════════════════════════════════════════ */
-@media(max-width:768px){
-  /* Nav */
   .nav-desktop{display:none!important}
-  .vmw-mobile-nav{display:flex!important}
-  .mobile-sticky-bar{display:none!important}
-  .theme-toggle{top:10px!important;right:10px!important;z-index:300}
-
-  /* Layout */
-  .section-pad{padding:72px 20px!important}
-  .two-col{grid-template-columns:1fr!important;gap:28px!important}
-  .hero-3d{width:160px!important;height:160px!important}
-
-  /* Sections */
-  .vmw-craftwork{height:280px!important}
-  .vmw-services-panel{padding:20px 16px!important}
-  .vmw-services-panel>div{padding:16px 0!important}
-
-  /* Gallery */
+  .mobile-sticky-bar{display:flex!important}
+  .hero-3d{width:180px!important;height:180px!important}
+  .two-col{grid-template-columns:1fr!important;gap:44px!important}
+  .section-pad{padding:80px 24px!important}
   .archive-grid{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:auto!important}
   .gallery-grid{grid-template-columns:repeat(2,1fr)!important;gap:6px!important}
+  .footer-cols{grid-template-columns:1fr!important;gap:28px!important}
+  .wa-fab{bottom:90px!important}
   .gallery-masonry{columns:2;column-gap:6px}
   .gallery-masonry>*{break-inside:avoid;margin-bottom:6px}
-  .preview-masonry{columns:2!important;column-gap:6px!important}
+}
+img{image-rendering:auto;-webkit-image-rendering:auto}
+.vmw-img{background:#0a0806}
+.theme-toggle{right:70px!important}
 
-  /* Footer */
-  .footer-cols{grid-template-columns:1fr!important;gap:20px!important}
-  .footer-contact-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
-
-  /* FAB */
-  .wa-fab{bottom:76px!important;right:14px!important}
-
-  /* Modals */
-  .vmw-commission-grid-2{grid-template-columns:1fr!important}
-  .vmw-commission-grid-4{grid-template-columns:1fr 1fr!important}
+.gold-text, .text-gold {
+  color:#FFD700 !important;
+  text-shadow:0 1px 2px rgba(0,0,0,.8);
+  mix-blend-mode:screen;
 }
 
-/* ════════════════════════════════════════════════
-   SMALL MOBILE (≤430px) — iPhone SE / Galaxy A series
-════════════════════════════════════════════════ */
-@media(max-width:430px){
-  .section-pad{padding:60px 16px!important}
-  .two-col{gap:20px!important}
-  .archive-grid{grid-template-columns:1fr 1fr!important}
-  .footer-contact-grid{grid-template-columns:1fr 1fr!important}
-  .preview-masonry{columns:2!important}
-  .theme-toggle{top:8px!important;right:8px!important}
+/* Process timeline mobile */
+@media (max-width: 768px) {
+  .vmw-process-grid {
+    grid-template-columns: 40px 1fr !important;
+    gap: 0 !important;
+  }
+  .vmw-process-img { display:none !important; }
+  .vmw-process-node { grid-column:1 !important; }
+  .vmw-process-content { grid-column:2 !important; padding-left:16px !important; padding-right:0 !important; }
 }
 
-/* ── Process timeline mobile ── */
-@media(max-width:768px){
-  .vmw-process-grid{grid-template-columns:40px 1fr!important;gap:0!important}
-  .vmw-process-img{display:none!important}
-  .vmw-process-node{grid-column:1!important}
-  .vmw-process-content{grid-column:2!important;padding-left:16px!important;padding-right:0!important}
-}
-
-@media(prefers-color-scheme:dark){
-  .hero-title{filter:brightness(1.4)}
+@media (prefers-color-scheme: dark) {
+  .hero-title { filter: brightness(1.4); }
 }
 `;
 const CSS = buildCSS(C);
@@ -692,42 +523,6 @@ const IMG = {
   work6:  '/gallery/temple/god.jpg',
 };
 
-// Dynamic IMG hook — returns IMG overridden by Supabase site_images
-const useIMG = () => {
-  const SI = useSiteImg();
-  return {
-    heroBg: SI.hero_bg    || IMG.heroBg,
-    gold:   SI.service_gold   || IMG.gold,
-    silver: SI.service_silver || IMG.silver,
-    copper: SI.service_copper || IMG.copper,
-    brass:  SI.service_stone  || IMG.brass,
-    pancha: SI.service_pancha || IMG.pancha,
-    idol:   SI.showcase_main  || IMG.idol,
-    vimana: SI.service_vimana || IMG.vimana,
-    crown:  SI.craftwork_2    || IMG.crown,
-    vessel: SI.legacy_1       || IMG.vessel,
-    temple: SI.showcase_main  || IMG.temple,
-    prabha: SI.legacy_2       || IMG.prabha,
-    work1:  SI.work_1  || IMG.work1,
-    work2:  SI.work_2  || IMG.work2,
-    work3:  SI.work_3  || IMG.work3,
-    work4:  SI.work_4  || IMG.work4,
-    work5:  SI.work_5  || IMG.work5,
-    work6:  SI.work_6  || IMG.work6,
-    // process section
-    process1: SI.process_1 || '/gallery/gold/crown.jpg',
-    process2: SI.process_2 || '/gallery/gold/kandabaranam.jpg',
-    process3: SI.process_3 || '/gallery/stone/stone1.jpg',
-    // gallery preview
-    preview1: SI.preview_1 || '/gallery/gold/sadarigold.jpg',
-    preview2: SI.preview_2 || '/gallery/gold/crown.jpg',
-    preview3: SI.preview_3 || '/gallery/gold/kandabaranam.jpg',
-    preview4: SI.preview_4 || '/gallery/gold/crown1.jpg',
-    preview5: SI.preview_5 || '/gallery/stone/stone1.jpg',
-    preview6: SI.preview_6 || '/gallery/temple/god.jpg',
-  };
-};
-
 /* ═══════════════════════════════════════════════════════════════
    SHARED SMALL COMPONENTS
 ═══════════════════════════════════════════════════════════════ */
@@ -755,10 +550,10 @@ const GoldRule = ({ w='100%', my=0, opacity=.14 }) => {
 const EASE_OUT   = [0.16, 1, 0.3, 1];
 const EASE_IN_OUT = [0.45, 0, 0.55, 1];
 
-// Base Reveal — fades up, triggers once
+// Base Reveal — fades up, triggers once (smooth on mobile)
 const Reveal = ({ children, delay=0, y=24, duration=0.8 }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:true, margin:'-60px' });
+  const inView = useInView(ref, { once:true, margin:'-40px' });
   return (
     <motion.div ref={ref}
       initial={{ opacity:0, y }}
@@ -772,7 +567,7 @@ const Reveal = ({ children, delay=0, y=24, duration=0.8 }) => {
 // Slide from left — triggers once
 const SlideLeft = ({ children, delay=0, distance=60, duration=0.9 }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:true, margin:'-60px' });
+  const inView = useInView(ref, { once:true, margin:'-40px' });
   return (
     <motion.div ref={ref}
       initial={{ opacity:0, x: -distance }}
@@ -786,7 +581,7 @@ const SlideLeft = ({ children, delay=0, distance=60, duration=0.9 }) => {
 // Slide from right — triggers once
 const SlideRight = ({ children, delay=0, distance=60, duration=0.9 }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:true, margin:'-60px' });
+  const inView = useInView(ref, { once:true, margin:'-40px' });
   return (
     <motion.div ref={ref}
       initial={{ opacity:0, x: distance }}
@@ -800,7 +595,7 @@ const SlideRight = ({ children, delay=0, distance=60, duration=0.9 }) => {
 // Stagger container helper — triggers once
 const StaggerContainer = ({ children, stagger=0.12, delay=0, className='', style={} }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:true, margin:'-60px' });
+  const inView = useInView(ref, { once:true, margin:'-40px' });
   return (
     <motion.div ref={ref} className={className} style={style}
       initial="hidden"
@@ -825,7 +620,7 @@ const StaggerItem = ({ children, y=28, duration=0.8, style={}, className='' }) =
 // Soft zoom in — triggers once
 const ZoomIn = ({ children, delay=0, scale=0.88, duration=0.9, style={} }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:true, margin:'-60px' });
+  const inView = useInView(ref, { once:true, margin:'-40px' });
   return (
     <motion.div ref={ref} style={style}
       initial={{ opacity:0, scale }}
@@ -839,7 +634,7 @@ const ZoomIn = ({ children, delay=0, scale=0.88, duration=0.9, style={} }) => {
 // Fade in — triggers once
 const FadeIn = ({ children, delay=0, duration=0.9, style={}, className='' }) => {
   const ref = useRef(null);
-  const inView = useInView(ref, { once:true, margin:'-40px' });
+  const inView = useInView(ref, { once:true, margin:'-30px' });
   return (
     <motion.div ref={ref} style={style} className={className}
       initial={{ opacity:0 }}
@@ -1098,8 +893,6 @@ const CurvyButton = ({ children, onClick, primary=false, style={} }) => {
   }, []);
 
   useEffect(() => {
-    // Skip magnetic effect on touch devices — saves RAF calls per button
-    if (window.matchMedia('(hover: none)').matches) return;
     window.addEventListener('mousemove', handleMouseMove, { passive: true });
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
@@ -1150,26 +943,24 @@ const SectionCTA = ({ primary="Commission a Piece", secondary="View Gallery", on
 const CanvasBg = () => {
   const C = useTheme();
   const ref = useRef(null);
-  // Disable canvas on mobile — saves significant CPU/battery
-  const isMobileDevice = typeof window !== 'undefined' && window.innerWidth <= 768;
   useEffect(() => {
-    if (isMobileDevice) return;
     const canvas = ref.current;
-    if (!canvas) return;
     const ctx = canvas.getContext('2d');
     let W = canvas.width = window.innerWidth;
     let H = canvas.height = window.innerHeight;
-    const particles = Array.from({ length: 10 }, () => ({
+    // Reduced from 28 to 14 particles for performance
+    const particles = Array.from({ length: 14 }, () => ({
       x: Math.random()*W, y: Math.random()*H,
-      vx:(Math.random()-.5)*.06, vy:(Math.random()-.5)*.06,
-      r: Math.random()*.5+.2, o: Math.random()*.08+.02
+      vx:(Math.random()-.5)*.08, vy:(Math.random()-.5)*.08,
+      r: Math.random()*.6+.2, o: Math.random()*.12+.03
     }));
     let raf;
     let frame = 0;
     const draw = () => {
       raf = requestAnimationFrame(draw);
       frame++;
-      if (frame % 3 !== 0) return; // ~20fps — enough for ambient effect
+      // Only redraw every 2 frames (30fps instead of 60fps)
+      if (frame % 2 !== 0) return;
       ctx.clearRect(0,0,W,H);
       particles.forEach(p => {
         ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
@@ -1181,34 +972,28 @@ const CanvasBg = () => {
     };
     draw();
     const onResize = () => { W=canvas.width=window.innerWidth; H=canvas.height=window.innerHeight; };
-    window.addEventListener('resize',onResize,{passive:true});
+    window.addEventListener('resize',onResize);
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize',onResize); };
-  }, [isMobileDevice]);
-  if (isMobileDevice) return null;
-  return <canvas ref={ref} style={{ position:'fixed', inset:0, zIndex:0, pointerEvents:'none', opacity:.12 }}/>;
+  }, []);
+  return <canvas ref={ref} style={{ position:'fixed', inset:0, zIndex:0, pointerEvents:'none', opacity:.15 }}/>;
 };
 
-const Grain = () => {
-  // Disabled on mobile — saves GPU compositing layer
-  if (typeof window !== 'undefined' && window.innerWidth <= 768) return null;
-  return (
-    <div style={{ position:'fixed', inset:0, zIndex:1, pointerEvents:'none', opacity:.025,
-      backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-      backgroundRepeat:'repeat', backgroundSize:'256px 256px' }}/>
-  );
-};
+const Grain = () => (
+  <div style={{ position:'fixed', inset:0, zIndex:1, pointerEvents:'none', opacity:.025,
+    backgroundImage:`url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+    backgroundRepeat:'repeat', backgroundSize:'256px 256px' }}/>
+);
 
 /* ═══════════════════════════════════════════════════════════════
    CRAFTWORK IMAGE PANEL — replaces 3D model (no external deps)
 ═══════════════════════════════════════════════════════════════ */
 const CraftworkPanel = () => {
   const C = useTheme();
-  const SI = useSiteImg();
   const PANEL_IMGS = [
-    { src: SI.craftwork_1 || '/gallery/gold/sadarigold.jpg',   label:'Sadari Gold — 24K Nagas Work' },
-    { src: SI.craftwork_2 || '/gallery/gold/crown.jpg',         label:'Crown Work — Gold Handcrafted' },
-    { src: SI.craftwork_3 || '/gallery/gold/kanganam4.jpg',     label:'Kanganam — Gold Stone Setting' },
-    { src: SI.craftwork_4 || '/gallery/gold/kandabaranam.jpg',  label:'Kandabaranam — Crown Work' },
+    { src:'/gallery/gold/sadarigold.jpg',   label:'Sadari Gold — 24K Nagas Work' },
+    { src:'/gallery/gold/crown.jpg',         label:'Crown Work — Gold Handcrafted' },
+    { src:'/gallery/gold/kanganam4.jpg',     label:'Kanganam — Gold Stone Setting' },
+    { src:'/gallery/gold/kandabaranam.jpg',  label:'Kandabaranam — Crown Work' },
   ];
   const [active, setActive] = useState(0);
 
@@ -1218,7 +1003,7 @@ const CraftworkPanel = () => {
   }, []);
 
   return (
-    <div className="vmw-craftwork" style={{ position:'relative', height:540, overflow:'hidden', border:`1px solid ${C.border}`, background:C.bg2 }}>
+    <div style={{ position:'relative', height:540, overflow:'hidden', border:`1px solid ${C.border}`, background:C.bg2 }}>
       <AnimatePresence mode="wait">
         <motion.img
           key={active}
@@ -1881,9 +1666,6 @@ const Nav = ({ scrolled }) => {
         </motion.div>
       </motion.div>
 
-      {/* ── Mobile top nav bar (shown only on ≤768px) ── */}
-      <MobileNav onMenuOpen={() => setMenuOpen(true)} C={C} />
-
       {/* ── Mobile fullscreen menu overlay ── */}
       <AnimatePresence>
         {menuOpen && isMobile && (
@@ -1894,22 +1676,13 @@ const Nav = ({ scrolled }) => {
             transition={{ duration: .35, ease: [.16,1,.3,1] }}
             style={{
               position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-              zIndex: 200,
-              background: C.isDark ? 'rgba(8,6,4,0.99)' : 'rgba(248,243,235,0.99)',
-              backdropFilter: 'blur(24px)', WebkitBackdropFilter: 'blur(24px)',
-              overflowY: 'auto', WebkitOverflowScrolling: 'touch',
-              paddingTop: 72, paddingBottom: 40, paddingLeft: 24, paddingRight: 24,
+              zIndex: 119,
+              background: C.isDark ? 'rgba(14,11,8,0.98)' : 'rgba(248,243,235,0.98)',
+              backdropFilter: 'blur(24px)',
+              overflowY: 'auto',
+              paddingTop: 80, paddingBottom: 40, paddingLeft: 24, paddingRight: 24,
             }}
           >
-            {/* Close button */}
-            <button onClick={() => setMenuOpen(false)}
-              style={{ position:'absolute', top:12, right:16, background:'none',
-                border:`1px solid ${C.border}`, color:C.dim, fontSize:20,
-                width:44, height:44, borderRadius:10, cursor:'pointer',
-                display:'flex',alignItems:'center',justifyContent:'center',
-                touchAction:'manipulation' }}>
-              ✕
-            </button>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               {navCards.map((card, ci) => (
                 <div key={card.label} style={{ marginBottom: 18 }}>
@@ -1967,13 +1740,13 @@ const Hero = () => {
   const navigate = useNavigate();
   const { setShowCommissionModal } = useAppCtx();
   const ref = useRef(null);
-  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
-  // Disable parallax on mobile — main cause of scroll jank on Android/iOS
-  const { scrollYProgress } = useScroll({ target: isMobile ? undefined : ref, offset:['start start','end start'] });
-  const textY = useTransform(scrollYProgress,[0,1], isMobile ? ['0%','0%'] : ['0%','6%']);
-  const fade  = useTransform(scrollYProgress,[0,.7], isMobile ? [1,1]         : [1,0]);
+  const { scrollYProgress } = useScroll({ target:ref, offset:['start start','end start'] });
+  // Reduced parallax range for performance
+  const bgY = useTransform(scrollYProgress,[0,1],['0%','12%']);
+  const textY = useTransform(scrollYProgress,[0,1],['0%','6%']);
+  const fade = useTransform(scrollYProgress,[0,.7],[1,0]);
   return (
-    <section id="home" ref={ref} className="vmw-hero" style={{position:'relative',height:'100svh',minHeight:'100svh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',overflow:'hidden',paddingTop:'env(safe-area-inset-top,0px)'}}>
+    <section id="home" ref={ref} style={{position:'relative',height:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',overflow:'hidden'}}>
       {/* Deep luxury black gradient background — no stock photo */}
       <div style={{position:'absolute',inset:0,zIndex:1,background:'radial-gradient(ellipse 90% 70% at 50% 30%, #1a1000 0%, #080604 55%, #050402 100%)'}}/>
       {/* Subtle warm gold vignette */}
@@ -1992,7 +1765,7 @@ const Hero = () => {
         <line x1="100%" y1="100%" x2="100%" y2="calc(100% - 180px)" stroke="#FFD700" strokeWidth=".5"/>
       </svg>
 
-      <motion.div style={{y:textY,opacity:fade,position:'relative',zIndex:3,textAlign:'center',padding:'0 24px',maxWidth:1080,width:'100%',paddingTop:'clamp(56px,8vw,0px)'}}>
+      <motion.div style={{y:textY,opacity:fade,position:'relative',zIndex:3,textAlign:'center',padding:'0 24px',maxWidth:1080,width:'100%'}}>
         <motion.div initial={{opacity:0,y:18}} animate={{opacity:1,y:0}} transition={{duration:1.1,delay:2.1}}
           style={{display:'inline-flex',alignItems:'center',gap:10,marginBottom:32,border:`1px solid rgba(255,215,0,0.22)`,padding:'8px 22px',background:'rgba(255,215,0,0.04)',backdropFilter:'blur(8px)'}}>
           <Dot/>
@@ -2001,7 +1774,7 @@ const Hero = () => {
         </motion.div>
 
         {/* Logo image replacing 3D model with subtle float and glow pulse */}
-        <motion.div initial={{opacity:0,scale:.75}} animate={{opacity:1,scale:1, ...(isMobile ? {} : {y:[-8,8,-8]})}} transition={{opacity:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, scale:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, ...(isMobile ? {} : {y:{duration:6,repeat:Infinity,ease:"easeInOut"}})}}
+        <motion.div initial={{opacity:0,scale:.75}} animate={{opacity:1,scale:1, y:[-8, 8, -8]}} transition={{opacity:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, scale:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, y:{duration:6, repeat:Infinity, ease:"easeInOut"}}}
           style={{width:220,height:220,margin:'0 auto 40px',position:'relative',display:'flex',alignItems:'center',justifyContent:'center'}}>
           <motion.div animate={{opacity:[0.16, 0.3, 0.16], scale:[1, 1.1, 1]}} transition={{duration:4, repeat:Infinity, ease:"easeInOut"}} style={{position:'absolute',inset:'-40%',background:`radial-gradient(circle,rgba(255,200,50,1) 0%,transparent 65%)`,pointerEvents:'none'}}/>
           <div style={{width:180,height:180,borderRadius:'50%',overflow:'hidden',position:'relative',
@@ -2059,7 +1832,7 @@ const Legacy = () => {
   return (
     <section id="legacy" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg2}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
-        <div className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'clamp(28px,5vw,96px)',alignItems:'center',marginBottom:88}}>
+        <div className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:96,alignItems:'center',marginBottom:88}}>
           <SlideLeft>
             <span style={{...ff.body,fontSize:8,letterSpacing:'.52em',color:C.dim,fontWeight:600,textTransform:'uppercase',display:'block',marginBottom:18,opacity:.8}}>The Bloodline of Art</span>
             <h2 style={{...ff.display,fontSize:'clamp(34px,5.8vw,70px)',lineHeight:.88,letterSpacing:'.04em',color:C.text,fontWeight:700,marginBottom:28}}>OVER A<br/><span style={{color:C.gold}}>CENTURY</span><br/>OF DEVOTION</h2>
@@ -2077,19 +1850,20 @@ const Legacy = () => {
 
         {/* STATS — gold shine on hover */}
         <style>{`
-          .stat-card{position:relative;overflow:hidden;transition:all 0.4s cubic-bezier(0.16,1,0.3,1);cursor:default}
-          .stat-card::before{content:'';position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,215,0,0) 0%,rgba(255,215,0,0.06) 50%,rgba(255,215,0,0) 100%);opacity:0;transition:opacity 0.4s}
-          @media(hover:hover){.stat-card:hover::before{opacity:1}}
-          .stat-number{transition:all 0.35s cubic-bezier(0.16,1,0.3,1)}
-          @media(hover:hover){.stat-card:hover .stat-number{color:#FFD700!important;text-shadow:0 0 40px rgba(255,215,0,0.6),0 2px 8px rgba(0,0,0,0.8)!important;transform:scale(1.08)}}
-          .stat-label{transition:color 0.35s}
-          @media(hover:hover){.stat-card:hover .stat-label{color:rgba(255,215,0,0.75)!important}}
-          /* Stats grid — 4col desktop, 2col mobile */
-          .vmw-stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px}
-          @media(max-width:768px){.vmw-stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:2px!important}}
+          .stat-card { position:relative; overflow:hidden; transition:all 0.4s cubic-bezier(0.16,1,0.3,1); cursor:default; }
+          .stat-card::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(255,215,0,0) 0%,rgba(255,215,0,0.06) 50%,rgba(255,215,0,0) 100%); opacity:0; transition:opacity 0.4s; }
+          .stat-card:hover::before { opacity:1; }
+          .stat-number { transition:all 0.35s cubic-bezier(0.16,1,0.3,1); }
+          .stat-card:hover .stat-number {
+            color:#FFD700 !important;
+            text-shadow:0 0 40px rgba(255,215,0,0.6), 0 0 80px rgba(255,215,0,0.3), 0 2px 8px rgba(0,0,0,0.8) !important;
+            transform:scale(1.08);
+          }
+          .stat-label { transition:color 0.35s; }
+          .stat-card:hover .stat-label { color:rgba(255,215,0,0.75) !important; }
         `}</style>
 
-        <StaggerContainer stagger={0.13} delay={0.1} className="vmw-stats-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:2}}>
+        <StaggerContainer stagger={0.13} delay={0.1} style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:2}}>
           {stats.map((s,i)=>{
             const Item = i % 2 === 0 ? StaggerItemLeft : StaggerItemRight;
             return (
@@ -2099,7 +1873,7 @@ const Legacy = () => {
                   onMouseEnter={()=>setHoveredStat(s.l)}
                   onMouseLeave={()=>setHoveredStat(null)}
                   style={{
-                    padding:'clamp(24px,4vw,52px) clamp(12px,2.5vw,30px)',
+                    padding:'52px 30px 48px',
                     border:`1px solid ${hoveredStat===s.l ? 'rgba(255,215,0,0.4)' : C.border}`,
                     textAlign:'center',
                     background: hoveredStat===s.l ? C.surfaceWarm : 'transparent',
@@ -2107,16 +1881,16 @@ const Legacy = () => {
                     transform: hoveredStat===s.l ? 'translateY(-6px)' : 'none',
                   }}
                 >
-                  <div style={{fontSize:20,marginBottom:10,opacity:hoveredStat===s.l?1:0.4,transition:'opacity 0.3s'}}>{s.icon}</div>
+                  <div style={{fontSize:22,marginBottom:14,opacity:hoveredStat===s.l?1:0.4,transition:'opacity 0.3s'}}>{s.icon}</div>
                   <div
                     className="stat-number"
                     style={{
                       ...ff.display,
-                      fontSize:'clamp(36px,7vw,76px)',
+                      fontSize:'clamp(52px,5.5vw,76px)',
                       color: hoveredStat===s.l ? '#FFD700' : C.text,
                       fontWeight:700,
                       lineHeight:1,
-                      marginBottom:12,
+                      marginBottom:14,
                       display:'block',
                     }}
                   >{s.n}</div>
@@ -2162,7 +1936,7 @@ const TrustedByTemples = () => {
     { name:'Kapaleeswarar', loc:'Chennai', img:'/gallery/temple/temple.jpg' },
   ];
   return (
-    <section className="section-pad" style={{position:'relative',zIndex:2,padding:'100px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
+    <section style={{position:'relative',zIndex:2,padding:'100px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:56}}>
@@ -2175,12 +1949,7 @@ const TrustedByTemples = () => {
             </p>
           </div>
         </Reveal>
-        <style>{`
-          .vmw-temples-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:2px}
-          @media(max-width:768px){.vmw-temples-grid{grid-template-columns:repeat(2,1fr);gap:2px}}
-          @media(max-width:430px){.vmw-temples-grid{grid-template-columns:repeat(2,1fr)}}
-        `}</style>
-        <StaggerContainer stagger={0.09} delay={0.1} className="vmw-temples-grid">
+        <StaggerContainer stagger={0.09} delay={0.1} style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:2}}>
           {temples.map((t,i)=>{
             const Item = i % 2 === 0 ? StaggerItemLeft : StaggerItemRight;
             return (
@@ -2228,10 +1997,9 @@ const Services = () => {
   const C = useTheme();
   const navigate = useNavigate();
   const [active, setActive] = useState(0);
-  const DI = useIMG();
   const metals = [
     {
-      name:'Gold Work', accent:'#FFD700', img: DI.gold, icon:'✦',
+      name:'Gold Work', accent:'#FFD700', img:'/gallery/gold/sadarigold.jpg', icon:'✦',
       badge:'24K · Nagas · Stone · Electro Plating',
       desc:'The pinnacle of temple metalcraft — pure 24K gold worked by hand using century-old Chola techniques alongside modern European electro-plating technology.',
       services:[
@@ -2241,7 +2009,7 @@ const Services = () => {
       ],
     },
     {
-      name:'Silver Work', accent:'#B8C0CC', img: DI.silver, icon:'◈',
+      name:'Silver Work', accent:'#B8C0CC', img:'/gallery/silver/kandabaranam.jpg', icon:'◈',
       badge:'Pure Silver · Nagas · Stone',
       desc:'Sterling silver temple metalcraft — hand-beaten and stone-set for idols, crowns, vessels, and architectural temple elements.',
       services:[
@@ -2250,7 +2018,7 @@ const Services = () => {
       ],
     },
     {
-      name:'Copper Work', accent:'#B87333', img: DI.copper, icon:'❋',
+      name:'Copper Work', accent:'#B87333', img:'/gallery/gold/hand1.jpg', icon:'❋',
       badge:'Nagas · Electro · Gold Foil · Polishing',
       desc:'Copper is the preferred base metal for large temple structures. We offer the full spectrum — from hand-beaten nagas work to European electro gold plating with decade-long guarantees.',
       services:[
@@ -2262,7 +2030,7 @@ const Services = () => {
       ],
     },
     {
-      name:'Brass Work', accent:'#B09830', img: DI.brass, icon:'◉',
+      name:'Brass Work', accent:'#B09830', img:'/gallery/stone/stone2.jpg', icon:'◉',
       badge:'Polish · Nagas · Lattice Work',
       desc:'Brass temple pieces — lamps, bells, panels — restored to their original lustre through specialist polishing and traditional nagas lattice craftsmanship.',
       services:[
@@ -2271,7 +2039,7 @@ const Services = () => {
       ],
     },
     {
-      name:'Panchaloha', accent:'#C8B88A', img: DI.pancha, icon:'⬡',
+      name:'Panchaloha', accent:'#C8B88A', img:'/gallery/temple/god.jpg', icon:'⬡',
       badge:'5-Metal Sacred Alloy · Divine Idols',
       desc:'Panchaloha — the sacred five-metal alloy of Gold, Silver, Copper, Iron, and Lead — prescribed by the Agamas as the only appropriate material for consecrated divine idols.',
       services:[
@@ -2312,8 +2080,8 @@ const Services = () => {
         </div>
         <AnimatePresence mode="wait">
           <motion.div key={active} initial={{opacity:0,y:18}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-18}} transition={{duration:.55,ease:[.16,1,.3,1]}}
-            className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1.5fr',border:`1px solid ${C.border}`,minHeight:'auto'}}>
-            <div style={{position:'relative',overflow:'hidden',minHeight:280}}>
+            className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1.5fr',border:`1px solid ${C.border}`,minHeight:500}}>
+            <div style={{position:'relative',overflow:'hidden',minHeight:380}}>
               <img src={m.img} alt={m.name} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',opacity:.5,filter:'sepia(18%)'}}/>
               <div style={{position:'absolute',inset:0,background:'linear-gradient(to right,transparent 40%,rgba(20,18,16,.92) 100%)'}}/>
               <div style={{position:'absolute',bottom:32,left:28}}>
@@ -2323,7 +2091,7 @@ const Services = () => {
                 <div style={{...ff.serif,fontSize:13,lineHeight:1.85,color:C.dim,fontStyle:'italic',maxWidth:220}}>{m.desc}</div>
               </div>
             </div>
-            <div className="vmw-services-panel" style={{padding:'44px 48px',display:'flex',flexDirection:'column'}}>
+            <div style={{padding:'44px 48px',display:'flex',flexDirection:'column'}}>
               {m.services.map((s,i)=>(
                 <div key={s.t} style={{borderBottom:`1px solid ${C.border}`,padding:'22px 0',...(i===m.services.length-1?{borderBottom:'none'}:{})}}>
                   <div style={{display:'flex',gap:16,alignItems:'flex-start'}}>
@@ -2356,7 +2124,7 @@ const Showcase = () => {
   return (
   <section id="showcase" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
     <div style={{maxWidth:1240,margin:'0 auto'}}>
-      <div className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'clamp(28px,5vw,80px)',alignItems:'center'}}>
+      <div className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:80,alignItems:'center'}}>
         <SlideLeft>
           <span style={{...ff.body,fontSize:8,letterSpacing:'.52em',color:C.dim,fontWeight:600,textTransform:'uppercase',display:'block',marginBottom:18,opacity:.8}}>Masterpiece Gallery</span>
           <h2 style={{...ff.display,fontSize:'clamp(30px,5vw,62px)',lineHeight:.9,letterSpacing:'.04em',color:C.text,fontWeight:700,marginBottom:24}}>OUR SACRED<br/><span style={{color:C.gold}}>CRAFT</span></h2>
@@ -2379,7 +2147,8 @@ const Showcase = () => {
                 borderTop:v==='top'?`1px solid ${C.borderHi}`:'none',borderBottom:v==='bottom'?`1px solid ${C.borderHi}`:'none',
                 borderLeft:h==='left'?`1px solid ${C.borderHi}`:'none',borderRight:h==='right'?`1px solid ${C.borderHi}`:'none',opacity:.5}}/>
             ))}
-            <div style={{position:'relative',zIndex:1,overflow:'hidden'}}>
+            <div style={{position:'absolute',inset:0,background:`radial-gradient(ellipse at 50% 50%,rgba(255,255,255,.02) 0%,transparent 68%)`}}/>
+            <div style={{height:540,border:`1px solid ${C.border}`,background:C.bg2,position:'relative',zIndex:1,overflow:'hidden'}}>
               <CraftworkPanel/>
               <div style={{position:'absolute',bottom:0,left:0,right:0,height:90,background:`linear-gradient(to top,${C.bg1},transparent)`,pointerEvents:'none'}}/>
             </div>
@@ -2397,17 +2166,16 @@ const Showcase = () => {
 const RealWorkPhotos = () => {
   const C = useTheme();
   const { setShowCommissionModal } = useAppCtx();
-  const DI = useIMG();
   const photos = [
-    { img: DI.work1, label:'Gold Crown Piece',    desc:'Handcrafted gold crown — traditional nagas craftsmanship, commissioned for a major Chennai temple, 2023.' },
-    { img: DI.work2, label:'Sadari Gold Set',     desc:'Pure gold sadari crown — traditional nagas work, stone setting by our Sowcarpet master artisans, 2023.' },
-    { img: DI.work3, label:'Kanganam Gold',       desc:'Gold stone-set kanganam bangle — lattice nagas work for a temple in London, 2023.' },
-    { img: DI.work4, label:'Silver Kandabaranam', desc:'Sterling silver kandabaranam — hand-beaten nagas work, traditional Agamic specifications, 2022.' },
-    { img: DI.work5, label:'Stone Inlay Piece',   desc:'Temple jewellery with precious stone setting — gold inlay and stone work from our Sowcarpet workshop, 2024.' },
-    { img: DI.work6, label:'Panchaloha Vigraham', desc:'Authentic Panchaloha deity — cast and finished to full Agamic temple specifications, 2023.' },
+    { img:'/gallery/gold/crown.jpg',         label:'Gold Crown Piece',    desc:'Handcrafted gold crown — traditional nagas craftsmanship, commissioned for a major Chennai temple, 2023.' },
+    { img:'/gallery/gold/sadarigold.jpg',    label:'Sadari Gold Set',     desc:'Pure gold sadari crown — traditional nagas work, stone setting by our Sowcarpet master artisans, 2023.' },
+    { img:'/gallery/gold/kanganam4.jpg',     label:'Kanganam Gold',       desc:'Gold stone-set kanganam bangle — lattice nagas work for a temple in London, 2023.' },
+    { img:'/gallery/silver/kandabaranam.jpg',label:'Silver Kandabaranam', desc:'Sterling silver kandabaranam — hand-beaten nagas work, traditional Agamic specifications, 2022.' },
+    { img:'/gallery/stone/stone1.jpg',       label:'Stone Inlay Piece',   desc:'Temple jewellery with precious stone setting — gold inlay and stone work from our Sowcarpet workshop, 2024.' },
+    { img:'/gallery/temple/god.jpg',         label:'Panchaloha Vigraham', desc:'Authentic Panchaloha deity — cast and finished to full Agamic temple specifications, 2023.' },
   ];
   return (
-    <section className="section-pad" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
+    <section style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:60}}>
@@ -2420,12 +2188,7 @@ const RealWorkPhotos = () => {
             </p>
           </div>
         </Reveal>
-        <style>{`
-          .vmw-work-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
-          @media(max-width:768px){.vmw-work-grid{grid-template-columns:repeat(2,1fr)!important}}
-          @media(max-width:430px){.vmw-work-grid{grid-template-columns:1fr 1fr!important}}
-        `}</style>
-        <StaggerContainer stagger={0.12} delay={0.08} className="vmw-work-grid" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
+        <StaggerContainer stagger={0.12} delay={0.08} style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
           {photos.map((p,i)=>{
             const Item = i % 3 === 1 ? StaggerItemScale : (i % 2 === 0 ? StaggerItemLeft : StaggerItemRight);
             return (
@@ -2446,33 +2209,27 @@ const RealWorkPhotos = () => {
 const WorkPhotoCard = ({ photo }) => {
   const C = useTheme();
   const [loaded, setLoaded] = useState(false);
-  // No hover state on touch — use CSS hover only
+  const [hov, setHov] = useState(false);
   return (
-    <div
-      className="vmw-work-card"
-      style={{position:'relative',overflow:'hidden',aspectRatio:'4/3',border:`1px solid ${C.border}`,cursor:'default',background:C.bg1}}>
-      <style>{`
-        .vmw-work-card img{width:100%;height:100%;object-fit:cover;filter:sepia(10%);display:block;transition:transform .6s ease,opacity .4s ease}
-        .vmw-work-card .vmw-work-overlay{position:absolute;bottom:0;left:0;right:0;padding:16px 18px;transform:translateY(4px);opacity:1;transition:opacity .3s,transform .3s}
-        @media(hover:hover){
-          .vmw-work-card:hover img{transform:scale(1.06)}
-          .vmw-work-card:hover .vmw-work-overlay{opacity:1;transform:translateY(0)}
-        }
-        /* On touch devices — always show overlay at full opacity, no transform */
-        @media(hover:none){
-          .vmw-work-card .vmw-work-overlay{opacity:1!important;transform:none!important}
-          .vmw-work-card img{opacity:0.82}
-        }
-      `}</style>
-      {!loaded && <div className="skeleton" style={{position:'absolute',inset:0,zIndex:2}}/>}
-      <img src={photo.img} alt={photo.label} onLoad={()=>setLoaded(true)}
-        style={{width:'100%',height:'100%',objectFit:'cover',filter:'sepia(10%)',display:'block',opacity:loaded?.85:0}}/>
-      <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(14,12,10,.92) 0%,rgba(14,12,10,.1) 50%,transparent 100%)',pointerEvents:'none'}}/>
-      <div className="vmw-work-overlay">
-        <div style={{...ff.display,fontSize:'clamp(12px,3vw,15px)',color:C.text,fontWeight:600,marginBottom:4}}>{photo.label}</div>
-        <div style={{...ff.body,fontSize:'clamp(8px,2.5vw,9px)',color:C.dim,letterSpacing:'.06em',lineHeight:1.5}}>{photo.desc}</div>
-      </div>
-    </div>
+    <motion.div onHoverStart={()=>setHov(true)} onHoverEnd={()=>setHov(false)}
+      whileHover={{borderColor:C.borderHi}}
+      style={{position:'relative',overflow:'hidden',aspectRatio:'4/3',border:`1px solid ${C.border}`,cursor:'default',transition:'border-color .3s',background:C.bg1}}>
+      {!loaded && (
+        <div className="skeleton" style={{position:'absolute',inset:0,zIndex:2}}/>
+      )}
+      <motion.img src={photo.img} alt={photo.label} onLoad={()=>setLoaded(true)}
+        animate={{scale:hov?1.06:1,opacity:hov?.95:.85}}
+        transition={{duration:.8,ease:[.16,1,.3,1]}}
+        style={{width:'100%',height:'100%',objectFit:'cover',filter:'sepia(10%)',display:'block'}}/>
+      <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(14,12,10,.88) 0%,transparent 55%)',pointerEvents:'none'}}/>
+      <motion.div animate={{y:hov?0:6,opacity:hov?1:.7}} transition={{duration:.32}}
+        style={{position:'absolute',bottom:0,left:0,right:0,padding:'20px 22px'}}>
+        <div style={{...ff.display,fontSize:15,color:C.text,fontWeight:600,marginBottom:6}}>{photo.label}</div>
+        <div style={{...ff.body,fontSize:9,color:C.dim,letterSpacing:'.08em',lineHeight:1.6}}>{photo.desc}</div>
+      </motion.div>
+      {/* Corner diamond */}
+      <div style={{position:'absolute',top:12,right:12,width:12,height:12,border:`1px solid ${C.borderHi}`,opacity:hov?.5:.18,transition:'opacity .3s',transform:'rotate(45deg)'}}/>
+    </motion.div>
   );
 };
 
@@ -2518,18 +2275,17 @@ const ProcessIcon = ({ n, icon, gold, dim, border, surfaceGold }) => (
 const ProcessSection = () => {
   const C = useTheme();
   const { setShowCommissionModal } = useAppCtx();
-  const DI = useIMG();
   const steps = [
-    { n:'01', title:'Initial Inquiry',       icon:'💬', img: DI.process1,  desc:'Share your requirement via WhatsApp or our contact form — temple name, deity, dimensions, metal preference, and timeline.' },
-    { n:'02', title:'Design Consultation',   icon:'✏️', img: DI.process2,  desc:'Our master craftsmen discuss design specifications, iconographic details per Agamic tradition, and provide a detailed quotation.' },
-    { n:'03', title:'Material Procurement',  icon:'⚱️', img: DI.process3,  desc:'We source hallmarked metals — 24K gold, sterling silver, Panchaloha alloy — from certified suppliers as per your chosen specification.' },
-    { n:'04', title:'Sacred Crafting',       icon:'🔨', img: DI.work3,     desc:'Hand-crafted by our master artisans at our Sowcarpet workshop using ancestral techniques passed down through generations since 1915.' },
-    { n:'05', title:'Quality Inspection',    icon:'🔍', img: DI.work1,     desc:'Every piece undergoes rigorous quality inspection — dimensions, finish, stone setting, and metal purity verified against commissioned specifications.' },
-    { n:'06', title:'Delivery & Blessing',   icon:'📦', img: DI.temple,    desc:'Safely packed and shipped or hand-delivered to your temple anywhere in India or internationally. Documentation provided for customs.' },
+    { n:'01', title:'Initial Inquiry',       icon:'💬', img:'/gallery/gold/crown.jpg',          desc:'Share your requirement via WhatsApp or our contact form — temple name, deity, dimensions, metal preference, and timeline.' },
+    { n:'02', title:'Design Consultation',   icon:'✏️', img:'/gallery/gold/crown1.jpg',         desc:'Our master craftsmen discuss design specifications, iconographic details per Agamic tradition, and provide a detailed quotation.' },
+    { n:'03', title:'Material Procurement',  icon:'⚱️', img:'/gallery/stone/stone3.jpg',        desc:'We source hallmarked metals — 24K gold, sterling silver, Panchaloha alloy — from certified suppliers as per your chosen specification.' },
+    { n:'04', title:'Sacred Crafting',       icon:'🔨', img:'/gallery/gold/kanganam4.jpg',      desc:'Hand-crafted by our master artisans at our Sowcarpet workshop using ancestral techniques passed down through generations since 1915.' },
+    { n:'05', title:'Quality Inspection',    icon:'🔍', img:'/gallery/gold/sadarigold.jpg',     desc:'Every piece undergoes rigorous quality inspection — dimensions, finish, stone setting, and metal purity verified against commissioned specifications.' },
+    { n:'06', title:'Delivery & Blessing',   icon:'📦', img:'/gallery/temple/temple.jpg',       desc:'Safely packed and shipped or hand-delivered to your temple anywhere in India or internationally. Documentation provided for customs.' },
   ];
 
   return (
-    <section className="section-pad" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg1,borderTop:`1px solid ${C.border}`}}>
+    <section style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg1,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
 
         {/* Header */}
@@ -2546,94 +2302,135 @@ const ProcessSection = () => {
         </Reveal>
 
         {/* Timeline container */}
-        <style>{`
-          /* Desktop — alternating left/right timeline */
-          .vmw-process-step{display:grid;grid-template-columns:1fr 80px 1fr;align-items:center;gap:0;margin-bottom:48px;position:relative;z-index:1}
-          .vmw-process-spine{position:absolute;left:50%;top:40px;bottom:40px;width:1px;background:linear-gradient(to bottom,transparent 0%,rgba(255,215,0,0.3) 12%,rgba(255,215,0,0.2) 88%,transparent 100%);transform:translateX(-50%);z-index:0}
-          .vmw-process-fill{position:absolute;left:50%;top:40px;width:2px;background:linear-gradient(180deg,#CC9900 0%,#FFD700 100%);transform:translateX(-50%);z-index:0;box-shadow:0 0 12px rgba(255,215,0,0.4)}
-
-          /* Mobile — simple vertical card list, spine hidden */
-          @media(max-width:768px){
-            .vmw-process-step{
-              display:flex!important;
-              flex-direction:column!important;
-              align-items:stretch!important;
-              gap:0!important;
-              margin-bottom:16px!important;
-            }
-            .vmw-process-spine,.vmw-process-fill{display:none!important}
-            .vmw-process-node-col{order:-1;display:flex;align-items:center;gap:12px;padding:16px 16px 0}
-            .vmw-process-content-col{padding:12px 16px 16px!important}
-            .vmw-process-img-col{display:none!important}
-            .vmw-process-step-card{border-radius:10px!important;padding:16px 18px!important}
-          }
-        `}</style>
         <div style={{position:'relative'}}>
-          <div className="vmw-process-spine"/>
+
+          {/* Central vertical spine */}
+          <div style={{
+            position:'absolute', left:'50%', top:40, bottom:40,
+            width:1,
+            background:`linear-gradient(to bottom, transparent 0%, ${C.gold}40 12%, ${C.gold}28 88%, transparent 100%)`,
+            transform:'translateX(-50%)',
+            zIndex:0,
+          }}/>
+          
           <motion.div
-            className="vmw-process-fill"
             initial={{ height: 0 }}
             whileInView={{ height: '100%' }}
             viewport={{ once: true, margin: '-20%' }}
             transition={{ duration: 2.5, ease: 'easeInOut' }}
+            style={{
+              position:'absolute', left:'50%', top:40,
+              width:2,
+              background:C.goldGrad,
+              transform:'translateX(-50%)',
+              zIndex:0,
+              boxShadow: `0 0 12px ${C.gold}66`
+            }}
           />
 
           {steps.map((step, i) => {
-            const isLeft = i % 2 === 0;
+            const isLeft = i % 2 === 0; // even = content left, image right
             return (
               <motion.div
                 key={step.n}
-                className="vmw-process-step"
                 initial={{ opacity:0, x: isLeft ? -48 : 48 }}
                 whileInView={{ opacity:1, x:0 }}
                 viewport={{ once:true, margin:'-60px' }}
                 transition={{ duration:0.78, delay:0.06, ease:[0.16,1,0.3,1] }}
+                style={{
+                  display:'grid',
+                  gridTemplateColumns:'1fr 80px 1fr',
+                  alignItems:'center',
+                  gap:0,
+                  marginBottom: i < steps.length - 1 ? 48 : 0,
+                  position:'relative', zIndex:1,
+                }}
               >
-                {/* Left cell */}
-                <div className={isLeft ? "vmw-process-content-col" : "vmw-process-img-col"} style={{
+                {/* Left cell — content or image depending on index */}
+                <div className={isLeft ? "vmw-process-content" : "vmw-process-img"} style={{
                   padding: isLeft ? '0 44px 0 0' : '0 44px 0 0',
-                  gridColumn: 1, gridRow: 1,
-                  display:'flex', justifyContent:'flex-end', width:'100%'
+                  gridColumn: 1,
+                  gridRow: 1,
+                  display: 'flex', justifyContent: 'flex-end', width: '100%'
                 }}>
                   {isLeft ? (
-                    <motion.div className="vmw-process-step-card" whileHover={{ x:-4 }} transition={{ duration:.28 }}
-                      style={{ padding:'36px 40px', background:C.surfaceWarm, border:`1px solid ${C.border}`, position:'relative', overflow:'hidden', width:'100%' }}>
+                    /* Content block */
+                    <motion.div
+                      whileHover={{ x:-4 }}
+                      transition={{ duration:.28 }}
+                      style={{
+                        padding:'36px 40px',
+                        background: C.surfaceWarm,
+                        border:`1px solid ${C.border}`,
+                        backdropFilter:'blur(8px)',
+                        position:'relative',
+                        overflow:'hidden',
+                      }}
+                    >
+                      {/* Top gold accent line */}
                       <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,${C.gold}66,transparent)`}}/>
                       <div style={{...ff.body,fontSize:7.5,letterSpacing:'.48em',color:C.gold,fontWeight:700,textTransform:'uppercase',marginBottom:12,opacity:.8}}>Step {step.n}</div>
-                      <div style={{...ff.display,fontSize:'clamp(16px,2vw,24px)',color:C.text,fontWeight:700,letterSpacing:'.04em',marginBottom:14,lineHeight:1.2}}>{step.title}</div>
+                      <div style={{...ff.display,fontSize:'clamp(18px,2vw,24px)',color:C.text,fontWeight:700,letterSpacing:'.04em',marginBottom:14,lineHeight:1.1}}>{step.title}</div>
                       <GoldRule w="40px" opacity={.45}/>
                       <div style={{...ff.body,fontSize:13,lineHeight:1.95,color:C.dim,fontWeight:300,marginTop:14}}>{step.desc}</div>
                     </motion.div>
                   ) : (
+                    /* Image placeholder / real photo */
                     <ProcessTimelineImage src={step.img} alt={step.title} C={C}/>
                   )}
                 </div>
 
-                {/* Centre node */}
-                <div className="vmw-process-node-col" style={{ gridColumn:2, gridRow:1, display:'flex', justifyContent:'center', alignItems:'center', zIndex:2, position:'relative' }}>
+                {/* Centre — step node */}
+                <div className="vmw-process-node" style={{
+                  gridColumn:2, gridRow:1,
+                  display:'flex', justifyContent:'center', alignItems:'center',
+                  zIndex:2, position:'relative',
+                }}>
+                  {/* Node glow */}
                   <motion.div
-                    animate={{ boxShadow:[`0 0 0 0 rgba(255,215,0,0)`,`0 0 18px 6px rgba(255,215,0,0.18)`,`0 0 0 0 rgba(255,215,0,0)`] }}
+                    animate={{ boxShadow:[
+                      `0 0 0 0 rgba(255,215,0,0)`,
+                      `0 0 18px 6px rgba(255,215,0,0.18)`,
+                      `0 0 0 0 rgba(255,215,0,0)`,
+                    ]}}
                     transition={{ duration:3.2, repeat:Infinity, ease:'easeInOut', delay:i*0.5 }}
                     style={{borderRadius:'50%'}}
                   >
-                    <ProcessIcon n={step.n} icon={step.icon} gold={C.gold} dim={C.dim} border={C.borderGold} surfaceGold={C.surfaceGold}/>
+                    <ProcessIcon
+                      n={step.n} icon={step.icon}
+                      gold={C.gold} dim={C.dim}
+                      border={C.borderGold} surfaceGold={C.surfaceGold}
+                    />
                   </motion.div>
                 </div>
 
                 {/* Right cell */}
-                <div className={isLeft ? "vmw-process-img-col" : "vmw-process-content-col"} style={{
-                  padding: '0 0 0 44px',
-                  gridColumn: 3, gridRow: 1,
-                  display:'flex', justifyContent:'flex-start', width:'100%'
+                <div className={isLeft ? "vmw-process-img" : "vmw-process-content"} style={{
+                  padding: isLeft ? '0 0 0 44px' : '0 0 0 44px',
+                  gridColumn: 3,
+                  gridRow: 1,
+                  display: 'flex', justifyContent: 'flex-start', width: '100%'
                 }}>
                   {isLeft ? (
+                    /* Image side */
                     <ProcessTimelineImage src={step.img} alt={step.title} C={C}/>
                   ) : (
-                    <motion.div className="vmw-process-step-card" whileHover={{ x:4 }} transition={{ duration:.28 }}
-                      style={{ padding:'36px 40px', background:C.surfaceWarm, border:`1px solid ${C.border}`, position:'relative', overflow:'hidden', width:'100%' }}>
-                      <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,${C.gold}66,transparent)`}}/>
+                    /* Content block */
+                    <motion.div
+                      whileHover={{ x:4 }}
+                      transition={{ duration:.28 }}
+                      style={{
+                        padding:'36px 40px',
+                        background: C.surfaceWarm,
+                        border:`1px solid ${C.border}`,
+                        backdropFilter:'blur(8px)',
+                        position:'relative',
+                        overflow:'hidden',
+                      }}
+                    >
+                      <div style={{position:'absolute',top:0,left:0,right:0,height:1,background:`linear-gradient(90deg,transparent,${C.gold}66)`}}/>
                       <div style={{...ff.body,fontSize:7.5,letterSpacing:'.48em',color:C.gold,fontWeight:700,textTransform:'uppercase',marginBottom:12,opacity:.8}}>Step {step.n}</div>
-                      <div style={{...ff.display,fontSize:'clamp(16px,2vw,24px)',color:C.text,fontWeight:700,letterSpacing:'.04em',marginBottom:14,lineHeight:1.2}}>{step.title}</div>
+                      <div style={{...ff.display,fontSize:'clamp(18px,2vw,24px)',color:C.text,fontWeight:700,letterSpacing:'.04em',marginBottom:14,lineHeight:1.1}}>{step.title}</div>
                       <GoldRule w="40px" opacity={.45}/>
                       <div style={{...ff.body,fontSize:13,lineHeight:1.95,color:C.dim,fontWeight:300,marginTop:14}}>{step.desc}</div>
                     </motion.div>
@@ -3896,7 +3693,7 @@ const Testimonials = () => {
   const t = testimonials[active];
 
   return (
-    <section id="testimonials" className="section-pad" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
+    <section id="testimonials" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:64}}>
@@ -3921,7 +3718,7 @@ const Testimonials = () => {
 
           <AnimatePresence mode="wait">
             <motion.div key={active} initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-22}} transition={{duration:.48,ease:[.16,1,.3,1]}}>
-              <div style={{border:`1px solid ${C.border}`,padding:'52px 56px',background:C.surfaceWarm,position:'relative'}}>
+              <div style={{border:`1px solid ${C.border}`,padding:'52px 56px',background:C.surfaceWarm,position:'relative',backdropFilter:'blur(8px)'}}>
                 {/* Giant quote mark */}
                 <div style={{...ff.display,fontSize:140,color:'rgba(255,255,255,0.04)',opacity:1,position:'absolute',top:4,left:22,lineHeight:1,fontWeight:900,pointerEvents:'none',userSelect:'none'}}>"</div>
                 {/* Stars */}
@@ -3951,8 +3748,7 @@ const Testimonials = () => {
         </div>
 
         {/* Navigation + mini cards grid */}
-        <style>{`.vmw-testi-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:36px}@media(max-width:768px){.vmw-testi-grid{grid-template-columns:1fr!important}}`}</style>
-        <StaggerContainer stagger={0.12} delay={0.05} className="vmw-testi-grid" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:36}}>
+        <StaggerContainer stagger={0.12} delay={0.05} style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:36}}>
           {testimonials.map((tm,i)=>{
             const Item = i % 2 === 0 ? StaggerItemLeft : StaggerItemRight;
             return (
@@ -4007,7 +3803,7 @@ const FAQ = () => {
   ];
 
   return (
-    <section id="faq" className="section-pad" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
+    <section id="faq" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:960,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:56}}>
@@ -4093,17 +3889,9 @@ const Archive = () => {
             </p>
           </SlideRight>
         </div>
-        <style>{`
-          .vmw-archive-grid{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,272px);gap:6px}
-          @media(max-width:768px){.vmw-archive-grid{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:auto!important;gap:6px!important}}
-          @media(max-width:430px){.vmw-archive-grid{grid-template-columns:1fr 1fr!important}}
-          .vmw-archive-item{min-height:160px}
-          @media(max-width:768px){.vmw-archive-span2{grid-column:span 1!important;grid-row:span 1!important}}
-        `}</style>
-        <div className="vmw-archive-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gridTemplateRows:'repeat(2,272px)',gap:6}}>
+        <div className="archive-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gridTemplateRows:'repeat(2,272px)',gap:6}}>
           {pieces.map((p,pidx)=>(
             <motion.div key={p.id} onHoverStart={()=>setHov(p.id)} onHoverEnd={()=>setHov(null)}
-              className={p.large ? 'vmw-archive-span2 vmw-archive-item' : 'vmw-archive-item'}
               initial={{ opacity:0, y:36 }}
               whileInView={{ opacity:1, y:0 }}
               viewport={{ once:true, margin:'-50px' }}
@@ -4366,17 +4154,17 @@ const Contact = () => {
             Enquire Now
           </motion.button>
           
-          <div style={{marginTop:48,paddingTop:48,borderTop:`1px solid ${C.border}`,display:'flex',justifyContent:'center',gap:'clamp(16px,4vw,40px)',flexWrap:'wrap'}}>
+          <div style={{marginTop:48,paddingTop:48,borderTop:`1px solid ${C.border}`,display:'flex',justifyContent:'center',gap:40,flexWrap:'wrap'}}>
             {[
               { icon:'☎', txt:BIZ.phone, link:`tel:${BIZ.phoneTel}` },
               { icon:'✉', txt:BIZ.email, link:`mailto:${BIZ.email}` },
               { icon:'💬', txt:`WhatsApp: ${BIZ.phone}`, link:BIZ.whatsapp },
-              { icon:'📍', txt:'Sowcarpet, Chennai', link:BIZ.mapLink },
+              { icon:'📍', txt:BIZ.address, link:BIZ.mapLink },
             ].map(c=>(
               <motion.a key={c.txt} href={c.link} target="_blank" rel="noopener noreferrer" whileHover={{y:-2}}
-                style={{display:'flex',alignItems:'center',gap:10,textDecoration:'none',minWidth:0}}>
-                <span style={{fontSize:16,color:C.gold,flexShrink:0}}>{c.icon}</span>
-                <span style={{...ff.body,fontSize:11,color:C.dim,letterSpacing:'.05em',textTransform:'uppercase',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{c.txt}</span>
+                style={{display:'flex',alignItems:'center',gap:12,textDecoration:'none'}}>
+                <span style={{fontSize:16,color:C.gold}}>{c.icon}</span>
+                <span style={{...ff.body,fontSize:11,color:C.dim,letterSpacing:'.05em',textTransform:'uppercase'}}>{c.txt}</span>
               </motion.a>
             ))}
           </div>
@@ -4392,7 +4180,7 @@ const Contact = () => {
 const Footer = () => {
   const C = useTheme();
   return (
-  <footer className="section-pad" style={{position:'relative',zIndex:2,padding:'76px 56px 44px',background:C.bg1,borderTop:`1px solid ${C.border}`,textAlign:'center',paddingBottom:'calc(44px + env(safe-area-inset-bottom,0px))'}}>
+  <footer style={{position:'relative',zIndex:2,padding:'76px 56px 44px',background:C.bg1,borderTop:`1px solid ${C.border}`,textAlign:'center'}}>
     <FadeIn duration={1.1}>
     <div style={{maxWidth:960,margin:'0 auto'}}>
       <div style={{display:'flex',justifyContent:'center',marginBottom:20}}>
@@ -4407,7 +4195,7 @@ const Footer = () => {
       <GoldRule my={28}/>
 
       {/* Footer Quick Contact Buttons — enhanced */}
-      <div className="footer-contact-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:8,marginBottom:40,maxWidth:720,margin:'0 auto 40px'}}>
+      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:40,maxWidth:720,margin:'0 auto 40px'}}>
         {[
           { icon:'📞', label:'Call Now', sub:BIZ.phone, action:()=>window.open(`tel:${BIZ.phoneTel}`), highlight:false },
           { icon:'💬', label:'WhatsApp', sub:'Chat Instantly', action:()=>window.open(BIZ.whatsapp), highlight:true },
@@ -4466,7 +4254,7 @@ const WAFab = () => {
         <motion.div initial={{scale:0,opacity:0}} animate={{scale:1,opacity:1}} exit={{scale:0}}
           transition={{type:'spring',stiffness:280,damping:20}}
           className="wa-fab"
-          style={{position:'fixed',bottom:'calc(env(safe-area-inset-bottom,0px) + 24px)',right:20,zIndex:200}}>
+          style={{position:'fixed',bottom:30,right:30,zIndex:200}}>
           <AnimatePresence>
             {tip && (
               <motion.div initial={{opacity:0,x:8}} animate={{opacity:1,x:0}} exit={{opacity:0,x:8}}
@@ -4491,55 +4279,16 @@ const WAFab = () => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   MOBILE TOP NAV BAR — shown only on ≤768px
-   Provides logo + hamburger to open the fullscreen menu overlay
-═══════════════════════════════════════════════════════════════ */
-const MobileNav = ({ onMenuOpen, C }) => (
-  <div className="vmw-mobile-nav" style={{
-    position:'fixed', top:0, left:0, right:0, zIndex:130,
-    height:56, display:'flex', alignItems:'center', justifyContent:'space-between',
-    padding:'0 14px',
-    background: C.isDark ? 'rgba(8,6,4,0.97)' : 'rgba(245,240,232,0.97)',
-    borderBottom:`1px solid ${C.isDark?'rgba(255,215,0,0.12)':'rgba(180,130,10,0.18)'}`,
-    backdropFilter:'blur(20px)', WebkitBackdropFilter:'blur(20px)',
-  }}>
-    {/* Logo */}
-    <div style={{display:'flex',alignItems:'center',gap:8,flex:1,minWidth:0}}>
-      <svg width="26" height="26" viewBox="0 0 40 40" style={{flexShrink:0}}>
-        <rect x="4" y="4" width="32" height="32" rx="2" fill="none" stroke={C.gold} strokeWidth="1.4" transform="rotate(45 20 20)"/>
-        <text x="20" y="26" textAnchor="middle" fontFamily="'Cinzel',serif" fontSize="13" fontWeight="700" fill={C.gold}>V</text>
-      </svg>
-      <div style={{minWidth:0}}>
-        <div style={{...ff.display,fontSize:9.5,letterSpacing:'.16em',color:C.text,fontWeight:700,lineHeight:1.2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>VIJAY METAL WORKS</div>
-        <div style={{...ff.body,fontSize:6,letterSpacing:'.3em',color:C.gold,fontWeight:600}}>SINCE 1915</div>
-      </div>
-    </div>
-    {/* Hamburger */}
-    <button onClick={onMenuOpen} aria-label="Open menu"
-      style={{background:'none',border:`1px solid ${C.isDark?'rgba(255,215,0,0.22)':'rgba(180,130,10,0.22)'}`,
-        borderRadius:8, padding:'7px 9px', cursor:'pointer',
-        display:'flex',flexDirection:'column',gap:5,alignItems:'center',justifyContent:'center',
-        minWidth:44, minHeight:44, touchAction:'manipulation', flexShrink:0}}>
-      {[0,1,2].map(i=>(
-        <div key={i} style={{width:i===1?14:20,height:2,borderRadius:2,
-          background:C.isDark?'rgba(255,255,255,0.88)':'rgba(20,10,0,0.82)'}}/>
-      ))}
-    </button>
-  </div>
-);
-
-/* ═══════════════════════════════════════════════════════════════
    STICKY MOBILE CONTACT BAR (enhanced)
 ═══════════════════════════════════════════════════════════════ */
 const MobileContactBar = () => {
   const C = useTheme();
   return (
-  <div className="mobile-sticky-bar vmw-mobile-contact-bar"
+  <div className="mobile-sticky-bar"
     style={{display:'none',position:'fixed',bottom:0,left:0,right:0,zIndex:190,
       flexDirection:'column',
       background:C.isDark?'rgba(20,18,16,0.97)':'rgba(245,240,232,0.97)',borderTop:`1px solid ${C.border}`,
-      backdropFilter:'blur(24px)', WebkitBackdropFilter:'blur(24px)',
-      paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
+      backdropFilter:'blur(24px)',paddingBottom:'env(safe-area-inset-bottom,0px)'}}>
     <div style={{height:1,background:'linear-gradient(90deg,transparent,rgba(255,215,0,0.3),transparent)'}}/>
     <div style={{display:'flex',gap:0,padding:'10px 12px 10px'}}>
       {[
@@ -4548,16 +4297,16 @@ const MobileContactBar = () => {
         { label:'✉ Email', sub:'Get Quote', action:()=>window.open(`mailto:${BIZ.email}`), primary:false },
       ].map((btn,i)=>(
         <button key={btn.label} onClick={btn.action}
-          style={{flex:1,padding:'12px 4px 10px',...ff.body,
+          style={{flex:1,padding:'11px 4px 9px',...ff.body,
             marginLeft:i===1?4:0, marginRight:i===1?4:0,
             background:btn.primary?C.gold:'transparent',
             border:`1px solid ${btn.primary?C.goldLt:C.border}`,
-            borderRadius:btn.primary?6:4,
-            cursor:'pointer',transition:'all .25s',touchAction:'manipulation',
+            borderRadius:btn.primary?3:2,
+            cursor:'pointer',transition:'all .25s',
             display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
-          <span style={{fontSize:9,letterSpacing:'.14em',fontWeight:700,textTransform:'uppercase',
-            color:btn.primary?'#000':C.dim}}>{btn.label}</span>
-          <span style={{fontSize:7,letterSpacing:'.12em',color:btn.primary?'rgba(0,0,0,.55)':C.faint,
+          <span style={{fontSize:8,letterSpacing:'.18em',fontWeight:700,textTransform:'uppercase',
+            color:btn.primary?'#fff':C.dim}}>{btn.label}</span>
+          <span style={{fontSize:6.5,letterSpacing:'.18em',color:btn.primary?'rgba(255,255,255,.55)':C.faint,
             textTransform:'uppercase'}}>{btn.sub}</span>
         </button>
       ))}
@@ -4618,7 +4367,6 @@ const GalleryPreview = ({ onViewAll }) => {
   const C = useTheme();
   const navigate = useNavigate();
   const { setShowCommissionModal } = useAppCtx();
-  const DI = useIMG();
   // FIX: Fetch featured items from Supabase (admin uploads) and merge with static items
   const [liveItems, setLiveItems] = useState([]);
   useEffect(() => {
@@ -4640,7 +4388,7 @@ const GalleryPreview = ({ onViewAll }) => {
         cat: r.category || 'Gold Work',
         img: r.image_url,
         artisanNotes: r.artisan_notes || '',
-        description: r.description || '',
+        description: r.description || '',   // Caption set in admin panel
         isFeatured: r.is_featured || false,
         _isUploaded: true,
       })));
@@ -4648,21 +4396,10 @@ const GalleryPreview = ({ onViewAll }) => {
     .catch(() => {});
     return () => { cancelled = true; };
   }, []);
-
-  // Static seed overridden by site_images admin uploads (preview_1..6)
-  const staticPreview = [
-    { id:'p1', gid:'p1', deity:'Sadari Gold Crown',   metal:'24K Gold Nagas',     cat:'Gold Work',   img: DI.preview1 },
-    { id:'p2', gid:'p2', deity:'Crown — Front View',  metal:'Gold Nagas',          cat:'Gold Work',   img: DI.preview2 },
-    { id:'p3', gid:'p3', deity:'Kandabaranam',         metal:'Temple Gold Crown',   cat:'Crown Work',  img: DI.preview3 },
-    { id:'p4', gid:'p4', deity:'Crown Piece I',        metal:'Gold Handwork',       cat:'Gold Work',   img: DI.preview4 },
-    { id:'p5', gid:'p5', deity:'Stone Piece I',        metal:'Stone · Gold Inlay',  cat:'Stone Work',  img: DI.preview5 },
-    { id:'p6', gid:'p6', deity:'Temple Deity',         metal:'Panchaloha Cast',     cat:'Vigraham',    img: DI.preview6 },
-  ];
-
-  // If there are featured uploaded items, show them first; otherwise use site-image-overrideable static seed
+  // If there are featured uploaded items, show them first; otherwise use static seed
   const featured = liveItems.length > 0
-    ? [...liveItems, ...staticPreview].slice(0, 6)
-    : staticPreview;
+    ? [...liveItems, ...GALLERY_IDOLS].slice(0, 6)
+    : GALLERY_IDOLS.slice(0, 6);
   const [hov, setHov] = useState(null);
 
   return (
@@ -4682,9 +4419,18 @@ const GalleryPreview = ({ onViewAll }) => {
 
         {/* Premium Masonry Showcase */}
         <style>{`
-          .preview-masonry { column-gap: 10px; margin-bottom: 48px; }
+          .preview-masonry { columns: 3; column-gap: 10px; margin-bottom: 48px; }
           .preview-masonry-item { break-inside: avoid; -webkit-column-break-inside: avoid; margin-bottom: 10px; position: relative; overflow: hidden; border-radius: 8px; border: 1px solid rgba(255,215,0,0.15); cursor: pointer; transition: transform 0.4s, border-color 0.4s; }
+          .preview-masonry-item:hover { transform: translateY(-4px); border-color: rgba(255,215,0,0.4); }
           .preview-masonry-item img { width: 100%; display: block; filter: sepia(8%); transition: transform 0.8s ease; }
+          .preview-masonry-item:hover img { transform: scale(1.08); }
+          @media (max-width: 768px) {
+            .preview-masonry { columns: 3; column-gap: 5px; }
+            .preview-masonry-item { margin-bottom: 5px; border-radius: 5px; }
+          }
+          @media (max-width: 360px) {
+            .preview-masonry { columns: 2; column-gap: 4px; }
+          }
         `}</style>
         <div className="preview-masonry">
           {featured.map((idol,idx)=>{
@@ -5853,10 +5599,10 @@ const ProfileModal = ({ onClose, C }) => {
       onClick={onClose}>
       <motion.div initial={{scale:0.97,y:20,opacity:0}} animate={{scale:1,y:0,opacity:1}} exit={{scale:0.97,y:10,opacity:0}}
         onClick={e=>e.stopPropagation()}
-        style={{width:'100%',maxWidth:800,maxHeight:'92vh',display:'flex',flexDirection:'column',background:C.bg1,border:`1px solid ${C.border}`,borderRadius:24,overflow:'hidden',boxShadow:'0 32px 80px rgba(0,0,0,0.8)'}}>
+        style={{width:'100%',maxWidth:800,maxHeight:'90vh',display:'flex',flexDirection:'column',background:C.bg1,border:`1px solid ${C.border}`,borderRadius:24,overflow:'hidden',boxShadow:'0 32px 80px rgba(0,0,0,0.8)'}}>
         
         {/* Profile Header */}
-        <div style={{padding:'32px 32px',display:'flex',alignItems:'center',gap:24,borderBottom:`1px solid ${C.border}`,position:'relative',flexWrap:'wrap'}}>
+        <div style={{padding:'40px 48px',display:'flex',alignItems:'center',gap:32,borderBottom:`1px solid ${C.border}`,position:'relative', flexWrap:'wrap'}}>
           <button onClick={onClose} style={{position:'absolute',top:24,right:24,background:'none',border:'none',color:C.dim,fontSize:24,cursor:'pointer'}}>×</button>
           
           <div style={{position:'relative',width:110,height:110,flexShrink:0}}>
@@ -6062,82 +5808,73 @@ const CommissionModal = ({ onClose, C }) => {
 
   return (
     <motion.div initial={{opacity:0}} animate={{opacity:1}} exit={{opacity:0}}
-      style={{position:'fixed',inset:0,zIndex:3000,background:'rgba(0,0,0,0.85)',backdropFilter:'blur(20px)',WebkitBackdropFilter:'blur(20px)',display:'flex',justifyContent:'center',alignItems:'flex-end',padding:0}}
+      style={{position:'fixed',inset:0,zIndex:3000,background:'rgba(0,0,0,0.85)',backdropFilter:'blur(20px)',display:'flex',justifyContent:'center',alignItems:'center',padding:20}}
       onClick={onClose}>
-      <motion.div initial={{y:'100%'}} animate={{y:0}} exit={{y:'100%'}}
-        transition={{type:'spring',damping:28,stiffness:220}}
+      <motion.div initial={{scale:0.95,y:20}} animate={{scale:1,y:0}} exit={{scale:0.95,y:20}}
         onClick={e=>e.stopPropagation()}
-        style={{width:'100%',maxWidth:650,maxHeight:'92vh',overflowY:'auto',WebkitOverflowScrolling:'touch',background:C.bg1,border:`1px solid ${C.border}`,borderRadius:'20px 20px 0 0',boxShadow:'0 -24px 60px rgba(0,0,0,0.8)',paddingBottom:'env(safe-area-inset-bottom,0px)',alignSelf:'flex-end',
-          /* Centre on desktop */
-          margin:'0 auto',
-        }}>
-        <style>{`
-          @media(min-width:540px){
-            .vmw-commission-sheet{border-radius:20px!important;margin:auto!important;align-self:center!important}
-          }
-        `}</style>
+        style={{width:'100%',maxWidth:650,maxHeight:'90vh',overflowY:'auto',background:C.bg1,border:`1px solid ${C.border}`,borderRadius:24,boxShadow:'0 24px 60px rgba(0,0,0,0.8)'}}>
         
         {!done ? (
           <>
-            {/* Drag handle */}
-            <div style={{width:40,height:4,background:'rgba(255,215,0,0.3)',borderRadius:2,margin:'14px auto 0'}}/>
-            <div style={{padding:'20px 24px 16px',borderBottom:`1px solid ${C.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div style={{padding:'32px 32px 20px',borderBottom:`1px solid ${C.border}`,display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div>
-                <h2 style={{...ff.display,fontSize:22,color:C.gold,margin:0}}>Commission Request</h2>
-                <p style={{...ff.body,fontSize:13,color:C.dim,margin:'4px 0 0'}}>Begin your sacred project with us.</p>
+                <h2 style={{...ff.display,fontSize:24,color:C.gold,margin:0}}>Commission Request</h2>
+                <p style={{...ff.body,fontSize:14,color:C.dim,margin:'4px 0 0'}}>Begin your sacred project with us.</p>
               </div>
-              <button onClick={onClose} style={{background:'none',border:'none',color:C.dim,fontSize:26,cursor:'pointer',minWidth:44,minHeight:44,display:'flex',alignItems:'center',justifyContent:'center',touchAction:'manipulation'}}>×</button>
+              <button onClick={onClose} style={{background:'none',border:'none',color:C.dim,fontSize:24,cursor:'pointer'}}>×</button>
             </div>
-            <form onSubmit={submit} style={{padding:'20px 24px',display:'flex',flexDirection:'column',gap:14}}>
-              <div className="vmw-commission-grid-2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-                <input name="fullName" required placeholder="Full Name" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
-                <input name="phone" required placeholder="Phone Number" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
+            <form onSubmit={submit} style={{padding:32,display:'flex',flexDirection:'column',gap:20}}>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+                <input name="fullName" required placeholder="Full Name" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+                <input name="phone" required placeholder="Phone Number" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
               </div>
-              <div className="vmw-commission-grid-2" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-                <input name="email" required type="email" placeholder="Email Address" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
-                <input name="whatsapp" placeholder="WhatsApp (Optional)" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:20}}>
+                <input name="email" required type="email" placeholder="Email Address" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+                <input name="whatsapp" placeholder="WhatsApp Number (Optional)" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
               </div>
-              <div className="vmw-commission-grid-4" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:14}}>
-                <select name="artworkType" required style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16,appearance:'none'}}>
-                  <option value="" disabled defaultValue="">Artwork Type</option>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:16}}>
+                <select name="artworkType" required style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14,appearance:'none'}}>
+                  <option value="" disabled selected>Artwork Type</option>
                   <option value="idol">Idol / Vigraham</option>
                   <option value="crown">Crown / Kireedam</option>
                   <option value="prabhavali">Prabhavali</option>
                   <option value="other">Other</option>
                 </select>
-                <select name="metal" required style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16,appearance:'none'}}>
-                  <option value="" disabled defaultValue="">Preferred Metal</option>
+                <select name="metal" required style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14,appearance:'none'}}>
+                  <option value="" disabled selected>Preferred Metal</option>
                   <option value="gold">24K Gold</option>
                   <option value="silver">Silver</option>
                   <option value="panchaloha">Panchaloha</option>
                   <option value="brass">Brass</option>
                 </select>
-                <input name="budget" placeholder="Budget Estimate" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
-                <input name="timeline" placeholder="Timeline (e.g. 3 months)" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16}}/>
+                <input name="budget" placeholder="Budget Estimate" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
+                <input name="timeline" placeholder="Expected Timeline (e.g., 3 months)" style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14}}/>
               </div>
-              <textarea name="description" required placeholder="Project Description — temple name, deity, dimensions, specifications..." rows={4} style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:16,resize:'vertical'}}/>
+              <textarea name="description" required placeholder="Project Description & Temple Details (Dimensions, specifications, history)..." rows={4} style={{width:'100%',padding:'14px 16px',background:C.surfaceWarm,border:`1px solid ${C.border}`,borderRadius:8,color:C.text,...ff.body,fontSize:14,resize:'vertical'}}/>
               
-              <div style={{display:'flex',alignItems:'center',gap:12,padding:'12px 16px',background:C.isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)',border:`1px dashed ${C.border}`,borderRadius:8}}>
+              <div style={{display:'flex', alignItems:'center', gap:12, padding:'12px 16px', background:C.isDark?'rgba(255,255,255,0.03)':'rgba(0,0,0,0.03)', border:`1px dashed ${C.border}`, borderRadius:8}}>
                 <div style={{fontSize:20}}>📎</div>
-                <div style={{flex:1,minWidth:0}}>
-                  <div style={{...ff.body,fontSize:13,color:C.text,fontWeight:600}}>Reference Images</div>
-                  <div style={{...ff.body,fontSize:11,color:C.dim}}>Sketches or existing idols (Max 3)</div>
+                <div style={{flex:1}}>
+                  <div style={{...ff.body, fontSize:13, color:C.text, fontWeight:600}}>Attach Reference Images</div>
+                  <div style={{...ff.body, fontSize:11, color:C.dim}}>Upload sketches or existing idols (Max 3 files)</div>
                 </div>
-                <input type="file" multiple accept="image/*" style={{width:90,fontSize:11,color:C.dim}}/>
+                <input type="file" multiple accept="image/*" style={{width:100, fontSize:11, color:C.dim}}/>
               </div>
               
               <button type="submit" disabled={submitting}
-                style={{padding:'16px',background:C.goldGrad,color:'#000',border:'none',borderRadius:8,...ff.body,fontSize:14,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',cursor:submitting?'not-allowed':'pointer',touchAction:'manipulation'}}>
-                {submitting ? 'Submitting…' : 'Submit Commission Request'}
+                style={{marginTop:10,padding:'16px',background:C.goldGrad,color:'#000',border:'none',borderRadius:8,...ff.body,fontSize:14,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',cursor:submitting?'not-allowed':'pointer'}}>
+                {submitting ? 'Connecting to Supabase...' : 'Submit Commission Request'}
               </button>
             </form>
           </>
         ) : (
-          <div style={{padding:'48px 24px',textAlign:'center'}}>
-            <motion.div initial={{scale:0}} animate={{scale:1,rotate:360}} transition={{type:'spring',stiffness:200,damping:20}} style={{fontSize:56,marginBottom:16}}>✨</motion.div>
-            <h2 style={{...ff.display,fontSize:26,color:C.gold,margin:'0 0 12px 0'}}>Commission Received</h2>
-            <p style={{...ff.body,fontSize:15,color:C.dim,lineHeight:1.6}}>Our master craftsmen will review your project and contact you shortly.</p>
-            <button onClick={onClose} style={{marginTop:28,padding:'14px 32px',background:C.goldGrad,border:'none',color:'#000',borderRadius:30,...ff.body,fontSize:12,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',cursor:'pointer',touchAction:'manipulation'}}>Close</button>
+          <div style={{padding:60,textAlign:'center'}}>
+            <motion.div initial={{scale:0}} animate={{scale:1, rotate:360}} transition={{type:'spring', stiffness:200, damping:20}} style={{fontSize:60,marginBottom:20}}>✨</motion.div>
+            <h2 style={{...ff.display,fontSize:28,color:C.gold,margin:'0 0 16px 0'}}>Commission Received</h2>
+            <p style={{...ff.body,fontSize:16,color:C.dim,lineHeight:1.6}}>Our master craftsmen will review your sacred project and contact you shortly.</p>
+            <div style={{display:'flex',gap:16,justifyContent:'center',marginTop:32}}>
+              <button onClick={onClose} style={{padding:'14px 32px',background:C.goldGrad,border:'none',color:'#000',borderRadius:30,...ff.body,fontSize:12,fontWeight:700,letterSpacing:'.1em',textTransform:'uppercase',cursor:'pointer'}}>Close Window</button>
+            </div>
           </div>
         )}
       </motion.div>
@@ -6199,19 +5936,17 @@ const AuthModal = ({ onClose, action }) => {
   return (
     <motion.div
       initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(30px)', WebkitBackdropFilter: 'blur(30px)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', padding: 0 }}
+      style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.92)', backdropFilter: 'blur(30px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}
       onClick={onClose}
     >
       <motion.div
-        initial={{ y: '100%' }} animate={{ y: 0 }} exit={{ y: '100%' }}
-        transition={{ type: 'spring', damping: 28, stiffness: 220 }}
+        initial={{ scale: 0.95, opacity: 0, y: 30 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.98, opacity: 0, y: 15 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
         onClick={e => e.stopPropagation()}
-        style={{ width: '100%', maxWidth: 420, border: '1px solid rgba(255,215,0,0.2)', background: 'linear-gradient(180deg, rgba(20,16,10,0.99) 0%, rgba(10,8,6,0.99) 100%)', borderRadius: '24px 24px 0 0', overflow: 'hidden', boxShadow: '0 -24px 60px rgba(0,0,0,0.9)', paddingBottom: 'env(safe-area-inset-bottom,0px)' }}
+        style={{ width: 'min(400px, 100vw)', border: '1px solid rgba(255,215,0,0.2)', background: 'linear-gradient(180deg, rgba(20,16,10,0.98) 0%, rgba(10,8,6,0.98) 100%)', borderRadius: 24, overflow: 'hidden', boxShadow: '0 40px 100px rgba(0,0,0,0.9)' }}
       >
         <div style={{ padding: '40px 32px 20px', textAlign: 'center', position: 'relative' }}>
-          {/* Drag handle */}
-          <div style={{ width:36, height:4, background:'rgba(255,215,0,0.25)', borderRadius:2, margin:'-24px auto 20px' }}/>
-          <button onClick={onClose} style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.05)', border: 'none', color: 'rgba(255,255,255,0.6)', width: 36, height: 36, borderRadius: '50%', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', touchAction: 'manipulation' }}>×</button>
+          <button onClick={onClose} style={{ position: 'absolute', top: 20, right: 20, background: 'rgba(255,255,255,0.05)', border: 'none', color: 'rgba(255,255,255,0.6)', width: 32, height: 32, borderRadius: '50%', fontSize: 18, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>×</button>
           <div style={{ fontSize: 42, marginBottom: 16, filter: 'drop-shadow(0 0 12px rgba(255,215,0,0.4))' }}>✨</div>
           <h3 style={{ fontFamily: "'Cinzel', serif", fontSize: 24, color: 'rgba(255,215,0,0.95)', margin: '0 0 8px 0', letterSpacing: '0.05em' }}>
             {isLogin ? 'Sign In' : 'Create Account'}
@@ -6223,8 +5958,8 @@ const AuthModal = ({ onClose, action }) => {
         <div style={{ padding: '0 32px 40px', display: 'flex', flexDirection: 'column', gap: 16 }}>
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {error && <div style={{ color: '#ff4444', fontSize: 13, textAlign: 'center' }}>{error}</div>}
-            <input type="email" required placeholder="Email Address" value={email} onChange={e=>setEmail(e.target.value)} style={{ width: '100%', padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontFamily: "'Jost', sans-serif", fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
-            <input type="password" required placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} style={{ width: '100%', padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontFamily: "'Jost', sans-serif", fontSize: 16, outline: 'none', boxSizing: 'border-box' }} />
+            <input type="email" required placeholder="Email Address" value={email} onChange={e=>setEmail(e.target.value)} style={{ width: '100%', padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontFamily: "'Jost', sans-serif", fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+            <input type="password" required placeholder="Password" value={password} onChange={e=>setPassword(e.target.value)} style={{ width: '100%', padding: '14px 20px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, color: '#fff', fontFamily: "'Jost', sans-serif", fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
             <motion.button disabled={loading} whileHover={loading ? {} : { scale: 1.02 }} whileTap={loading ? {} : { scale: 0.98 }} type="submit" style={{ width: '100%', padding: '16px 24px', background: loading ? 'rgba(255,215,0,0.5)' : 'linear-gradient(135deg, rgba(255,215,0,0.9) 0%, rgba(200,150,0,1) 100%)', color: '#000', border: 'none', borderRadius: 12, fontFamily: "'Jost', sans-serif", fontSize: 14, fontWeight: 700, cursor: loading ? 'not-allowed' : 'pointer', marginTop: 8, textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               {loading ? 'Authenticating...' : (isLogin ? 'Sign In' : 'Create Account')}
             </motion.button>
@@ -6242,21 +5977,11 @@ const AuthModal = ({ onClose, action }) => {
 
           <motion.button 
             whileHover={{ scale: 1.02, background: 'rgba(255,255,255,0.9)' }} whileTap={{ scale: 0.98 }}
-            onClick={() => {
-              const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-              const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-              if (!supabaseUrl || !supabaseKey) {
-                alert('Supabase is not configured. Add env vars to enable Google sign-in.');
-                return;
-              }
-              // Redirect to Supabase Google OAuth — user comes back to /gallery after auth
-              const redirectTo = encodeURIComponent(window.location.origin + '/gallery');
-              window.location.href = `${supabaseUrl}/auth/v1/authorize?provider=google&redirect_to=${redirectTo}`;
-            }}
-            style={{ width: '100%', padding: '14px 24px', background: 'rgba(255,255,255,0.92)', color: '#333', border: 'none', borderRadius: 12, fontFamily: "'Jost', sans-serif", fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.2)' }}
+            onClick={() => { alert('Google sign-in is coming soon. Please use email/password for now.'); }}
+            style={{ width: '100%', padding: '14px 24px', background: 'rgba(255,255,255,0.85)', color: '#555', border: 'none', borderRadius: 12, fontFamily: "'Jost', sans-serif", fontSize: 14, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.2)', opacity: 0.7 }}
           >
             <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-            Continue with Google
+            Continue with Google (Coming Soon)
           </motion.button>
           
           <motion.button 
@@ -6891,9 +6616,6 @@ function AppContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
 
-  // Fetch admin-controlled site images from Supabase
-  const siteImages = useSiteImages();
-
   // ── Visitor Tracking — logs each visit to Supabase analytics_events with location ──
   useEffect(() => {
     const trackVisit = async () => {
@@ -6933,39 +6655,6 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    // Handle Supabase OAuth callback — token arrives in URL hash fragment
-    const hash = window.location.hash;
-    if (hash && hash.includes('access_token=')) {
-      try {
-        const params = new URLSearchParams(hash.replace('#', ''));
-        const access_token = params.get('access_token');
-        const refresh_token = params.get('refresh_token');
-        const expires_at = params.get('expires_at');
-        if (access_token) {
-          // Fetch user info from Supabase
-          const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
-          const supabaseKey = process.env.REACT_APP_SUPABASE_ANON_KEY;
-          if (supabaseUrl && supabaseKey) {
-            fetch(`${supabaseUrl}/auth/v1/user`, {
-              headers: { apikey: supabaseKey, Authorization: `Bearer ${access_token}` }
-            })
-              .then(r => r.ok ? r.json() : null)
-              .then(userData => {
-                if (userData) {
-                  const session = { access_token, refresh_token, expires_at, user: userData };
-                  localStorage.setItem('vmw_session', JSON.stringify(session));
-                  setIsLoggedIn(true);
-                  setUser(userData);
-                  // Clean URL — remove hash without navigation
-                  window.history.replaceState(null, '', window.location.pathname);
-                }
-              })
-              .catch(() => {});
-          }
-        }
-      } catch (_) {}
-    }
-
     const sessionStr = localStorage.getItem('vmw_session');
     if(sessionStr) {
       try {
@@ -7011,7 +6700,6 @@ function AppContent() {
   },[]);
 
   return (
-    <SiteImgCtx.Provider value={siteImages}>
     <ThemeCtx.Provider value={themeC}>
       <AppCtx.Provider value={{ showCommissionModal, setShowCommissionModal, showAuthModal, setShowAuthModal, authAction, setAuthAction, isLoggedIn, setIsLoggedIn, user, setUser }}>
         <SEOMeta/>
@@ -7040,7 +6728,6 @@ function AppContent() {
         </div>
       </AppCtx.Provider>
     </ThemeCtx.Provider>
-    </SiteImgCtx.Provider>
   );
 }
 
