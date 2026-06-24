@@ -416,19 +416,170 @@ button{font-family:'Jost',sans-serif;cursor:pointer}
   background-size:400px 100%;
   animation:skeletonShimmer 1.6s ease-in-out infinite;
 }
+/* ─── MOBILE BASE (≤768px) ─────────────────────────────────── */
 @media(max-width:768px){
+  /* Navigation */
   .nav-desktop{display:none!important}
   .mobile-sticky-bar{display:flex!important}
-  .hero-3d{width:180px!important;height:180px!important}
-  .two-col{grid-template-columns:1fr!important;gap:44px!important}
-  .section-pad{padding:80px 24px!important}
+  /* Layout helpers */
+  .hero-3d{width:160px!important;height:160px!important}
+  .two-col{grid-template-columns:1fr!important;gap:36px!important}
+  .section-pad{padding:72px 20px 72px!important}
   .archive-grid{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:auto!important}
-  .gallery-grid{grid-template-columns:repeat(2,1fr)!important;gap:6px!important}
+  .gallery-grid{grid-template-columns:repeat(2,1fr)!important;gap:5px!important}
   .footer-cols{grid-template-columns:1fr!important;gap:28px!important}
   .wa-fab{bottom:90px!important}
-  .gallery-masonry{columns:2;column-gap:6px}
-  .gallery-masonry>*{break-inside:avoid;margin-bottom:6px}
+  /* Global masonry */
+  .gallery-masonry{columns:2;column-gap:5px}
+  .gallery-masonry>*{break-inside:avoid;margin-bottom:5px}
+
+  /* ── Hero ── */
+  #home{min-height:100svh!important}
+  #home h1{letter-spacing:.02em!important}
+  /* Logo on hero */
+  #home .vmw-hero-logo{
+    width:160px!important;
+    height:160px!important;
+  }
+  #home .vmw-hero-logo-img{
+    width:130px!important;
+    height:130px!important;
+  }
+
+  /* ── Legacy stats grid: 2×2 on mobile ── */
+  .vmw-stats-grid{
+    display:grid!important;
+    grid-template-columns:1fr 1fr!important;
+    gap:2px!important;
+  }
+  .vmw-stats-grid .stat-card{padding:36px 18px 32px!important}
+  .vmw-stats-grid .stat-number{font-size:clamp(38px,9vw,58px)!important}
+  .vmw-stats-grid .stat-label{font-size:9px!important;letter-spacing:.14em!important}
+
+  /* ── Trusted by Temples: 2×2 scroll grid ── */
+  .vmw-temples-grid{
+    display:grid!important;
+    grid-template-columns:repeat(2,1fr)!important;
+    gap:5px!important;
+  }
+
+  /* ── Services grid ── */
+  .vmw-services-grid{
+    grid-template-columns:1fr!important;
+    gap:12px!important;
+  }
+
+  /* ── Showcase section ── */
+  #showcase{padding:72px 20px!important}
+  #showcase .two-col{gap:40px!important}
+
+  /* ── RealWorkPhotos grid ── */
+  .vmw-work-grid{
+    grid-template-columns:repeat(2,1fr)!important;
+    gap:5px!important;
+  }
+
+  /* ── Preview masonry (Our Sacred Craftsmanship) ── */
+  .preview-masonry{
+    columns:2!important;
+    column-gap:5px!important;
+  }
+  .preview-masonry-item{
+    margin-bottom:5px!important;
+    border-radius:6px!important;
+  }
+  .preview-masonry-item .pm-label{font-size:14px!important}
+  .preview-masonry-item .pm-cat{font-size:8px!important}
+  .preview-masonry-item .pm-badge{font-size:8px!important;padding:4px 8px!important}
+
+  /* ── Testimonials grid ── */
+  .vmw-testimonials-grid{
+    grid-template-columns:repeat(2,1fr)!important;
+    gap:5px!important;
+  }
+  .vmw-testimonials-section{padding:72px 20px!important}
+  /* Featured testimonial on mobile */
+  .vmw-featured-testimonial{
+    padding:28px 18px!important;
+  }
+  .vmw-featured-testimonial p{
+    font-size:16px!important;
+  }
+
+  /* ── CTA buttons ── */
+  .vmw-cta-row{
+    flex-direction:column!important;
+    align-items:stretch!important;
+    gap:12px!important;
+  }
+  .vmw-cta-row .vmw-btn-primary,
+  .vmw-cta-row .vmw-btn-secondary{
+    width:100%!important;
+    justify-content:center!important;
+    padding:14px 24px!important;
+  }
+
+  /* ── SectionCTA ── */
+  .section-cta-row{
+    flex-direction:column!important;
+    align-items:stretch!important;
+    gap:12px!important;
+    width:100%!important;
+  }
+  .section-cta-row > *{width:100%!important;justify-content:center!important}
+
+  /* ── StarBorderButton ── */
+  .star-border-btn{width:100%!important;text-align:center!important}
+  .star-border-btn > div:last-child{justify-content:center!important}
+
+  /* ── Process timeline ── */
+  .vmw-process-section{padding:72px 20px!important}
+
+  /* ── Archive ── */
+  .vmw-archive-section{padding:72px 20px!important}
+  .vmw-archive-image-strip{height:100px!important}
+  .archive-grid{
+    grid-template-columns:repeat(2,1fr)!important;
+    grid-template-rows:auto!important;
+  }
+  .archive-grid > *[style*="span 2"]{
+    grid-column:span 1!important;
+    grid-row:span 1!important;
+    aspect-ratio:4/3!important;
+    min-height:140px!important;
+  }
+
+  /* ── Contact ── */
+  .vmw-contact-grid{grid-template-columns:1fr!important;gap:32px!important}
+
+  /* ── FAQ ── */
+  .vmw-faq-section{padding:72px 20px!important}
+  .vmw-faq-grid{grid-template-columns:1fr!important;gap:0!important}
+
+  /* ── Footer ── */
+  .vmw-footer{padding:60px 20px 100px!important}
 }
+
+/* ─── SMALL MOBILE (≤430px) ────────────────────────────────── */
+@media(max-width:430px){
+  .section-pad{padding:60px 16px!important}
+  .preview-masonry{columns:2!important;column-gap:4px!important}
+  .preview-masonry-item{margin-bottom:4px!important}
+  .vmw-stats-grid .stat-number{font-size:clamp(34px,10vw,52px)!important}
+  .vmw-temples-grid{grid-template-columns:repeat(2,1fr)!important;gap:4px!important}
+  .vmw-work-grid{grid-template-columns:repeat(2,1fr)!important;gap:4px!important}
+  .vmw-testimonials-grid{grid-template-columns:1fr 1fr!important;gap:4px!important}
+  #home h1{font-size:clamp(36px,10vw,56px)!important}
+}
+
+/* ─── ANIMATIONS safe for mobile ────────────────────────────── */
+@media(max-width:768px){
+  /* Ensure motion doesn't overflow — use clip instead of overflow:hidden on wrappers */
+  .motion-safe{overflow:visible!important}
+  /* Reduce parallax range so content stays fully in view */
+  .vmw-parallax{will-change:transform}
+}
+
 img{image-rendering:auto;-webkit-image-rendering:auto}
 .vmw-img{background:#0a0806}
 .theme-toggle{right:70px!important}
@@ -439,7 +590,7 @@ img{image-rendering:auto;-webkit-image-rendering:auto}
   mix-blend-mode:screen;
 }
 
-/* Process timeline mobile */
+/* ── Process timeline mobile ── */
 @media (max-width: 768px) {
   .vmw-process-grid {
     grid-template-columns: 40px 1fr !important;
@@ -925,7 +1076,7 @@ const SectionCTA = ({ primary="Commission a Piece", secondary="View Gallery", on
   const { setShowCommissionModal } = useAppCtx();
   return (
   <Reveal delay={.15}>
-    <div style={{ display:'flex', gap:14, flexWrap:'wrap', justifyContent:'center', marginTop:52, paddingTop:44, borderTop:`1px solid ${C.border}` }}>
+    <div className="section-cta-row" style={{ display:'flex', gap:14, flexWrap:'wrap', justifyContent:'center', marginTop:52, paddingTop:44, borderTop:`1px solid ${C.border}` }}>
       <CurvyButton primary onClick={onPrimary || (()=>setShowCommissionModal(true))}>
         {primary}
       </CurvyButton>
@@ -1774,7 +1925,7 @@ const Hero = () => {
         </motion.div>
 
         {/* Logo image replacing 3D model with subtle float and glow pulse */}
-        <motion.div initial={{opacity:0,scale:.75}} animate={{opacity:1,scale:1, y:[-8, 8, -8]}} transition={{opacity:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, scale:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, y:{duration:6, repeat:Infinity, ease:"easeInOut"}}}
+        <motion.div className="vmw-hero-logo" initial={{opacity:0,scale:.75}} animate={{opacity:1,scale:1, y:[-8, 8, -8]}} transition={{opacity:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, scale:{duration:1.6,delay:2.2,ease:[.16,1,.3,1]}, y:{duration:6, repeat:Infinity, ease:"easeInOut"}}}
           style={{width:220,height:220,margin:'0 auto 40px',position:'relative',display:'flex',alignItems:'center',justifyContent:'center'}}>
           <motion.div animate={{opacity:[0.16, 0.3, 0.16], scale:[1, 1.1, 1]}} transition={{duration:4, repeat:Infinity, ease:"easeInOut"}} style={{position:'absolute',inset:'-40%',background:`radial-gradient(circle,rgba(255,200,50,1) 0%,transparent 65%)`,pointerEvents:'none'}}/>
           <div style={{width:180,height:180,borderRadius:'50%',overflow:'hidden',position:'relative',
@@ -1801,7 +1952,7 @@ const Hero = () => {
           {BIZ.tagline}
         </motion.p>
         <motion.div initial={{opacity:0,y:18}} animate={{opacity:1,y:0}} transition={{duration:1,delay:3.05}}
-          style={{display:'flex',gap:24,justifyContent:'center',flexWrap:'wrap',alignItems:'center',marginTop:24}}>
+          className="section-cta-row" style={{display:'flex',gap:24,justifyContent:'center',flexWrap:'wrap',alignItems:'center',marginTop:24}}>
           <CurvyButton primary onClick={()=>navigate('/gallery')}>View Our Work</CurvyButton>
           <StarBorderButton onClick={()=>setShowCommissionModal(true)} speed={5}>Commission Now</StarBorderButton>
         </motion.div>
@@ -1863,7 +2014,7 @@ const Legacy = () => {
           .stat-card:hover .stat-label { color:rgba(255,215,0,0.75) !important; }
         `}</style>
 
-        <StaggerContainer stagger={0.13} delay={0.1} style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:2}}>
+        <StaggerContainer stagger={0.13} delay={0.1} style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:2}} className="vmw-stats-grid">
           {stats.map((s,i)=>{
             const Item = i % 2 === 0 ? StaggerItemLeft : StaggerItemRight;
             return (
@@ -1936,7 +2087,7 @@ const TrustedByTemples = () => {
     { name:'Kapaleeswarar', loc:'Chennai', img:'/gallery/temple/temple.jpg' },
   ];
   return (
-    <section style={{position:'relative',zIndex:2,padding:'100px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
+    <section style={{position:'relative',zIndex:2,padding:'100px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}} className="section-pad vmw-temples-section">
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:56}}>
@@ -1949,7 +2100,7 @@ const TrustedByTemples = () => {
             </p>
           </div>
         </Reveal>
-        <StaggerContainer stagger={0.09} delay={0.1} style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:2}}>
+        <StaggerContainer stagger={0.09} delay={0.1} style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:2}} className="vmw-temples-grid">
           {temples.map((t,i)=>{
             const Item = i % 2 === 0 ? StaggerItemLeft : StaggerItemRight;
             return (
@@ -2175,7 +2326,7 @@ const RealWorkPhotos = () => {
     { img:'/gallery/temple/god.jpg',         label:'Panchaloha Vigraham', desc:'Authentic Panchaloha deity — cast and finished to full Agamic temple specifications, 2023.' },
   ];
   return (
-    <section style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
+    <section style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}} className="section-pad vmw-realwork-section">
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:60}}>
@@ -2188,7 +2339,7 @@ const RealWorkPhotos = () => {
             </p>
           </div>
         </Reveal>
-        <StaggerContainer stagger={0.12} delay={0.08} style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}}>
+        <StaggerContainer stagger={0.12} delay={0.08} style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6}} className="vmw-work-grid">
           {photos.map((p,i)=>{
             const Item = i % 3 === 1 ? StaggerItemScale : (i % 2 === 0 ? StaggerItemLeft : StaggerItemRight);
             return (
@@ -3693,7 +3844,7 @@ const Testimonials = () => {
   const t = testimonials[active];
 
   return (
-    <section id="testimonials" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
+    <section id="testimonials" className="section-pad vmw-testimonials-section" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:64}}>
@@ -3718,7 +3869,7 @@ const Testimonials = () => {
 
           <AnimatePresence mode="wait">
             <motion.div key={active} initial={{opacity:0,y:22}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-22}} transition={{duration:.48,ease:[.16,1,.3,1]}}>
-              <div style={{border:`1px solid ${C.border}`,padding:'52px 56px',background:C.surfaceWarm,position:'relative',backdropFilter:'blur(8px)'}}>
+              <div className="vmw-featured-testimonial" style={{border:`1px solid ${C.border}`,padding:'52px 56px',background:C.surfaceWarm,position:'relative',backdropFilter:'blur(8px)'}}>
                 {/* Giant quote mark */}
                 <div style={{...ff.display,fontSize:140,color:'rgba(255,255,255,0.04)',opacity:1,position:'absolute',top:4,left:22,lineHeight:1,fontWeight:900,pointerEvents:'none',userSelect:'none'}}>"</div>
                 {/* Stars */}
@@ -3748,7 +3899,7 @@ const Testimonials = () => {
         </div>
 
         {/* Navigation + mini cards grid */}
-        <StaggerContainer stagger={0.12} delay={0.05} style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:36}}>
+        <StaggerContainer stagger={0.12} delay={0.05} style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:6,marginBottom:36}} className="vmw-testimonials-grid">
           {testimonials.map((tm,i)=>{
             const Item = i % 2 === 0 ? StaggerItemLeft : StaggerItemRight;
             return (
@@ -3803,7 +3954,7 @@ const FAQ = () => {
   ];
 
   return (
-    <section id="faq" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
+    <section id="faq" className="section-pad vmw-faq-section" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:960,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:56}}>
@@ -3889,14 +4040,14 @@ const Archive = () => {
             </p>
           </SlideRight>
         </div>
-        <div className="archive-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gridTemplateRows:'repeat(2,272px)',gap:6}}>
+        <div className="archive-grid" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gridTemplateRows:'auto',gap:6}}>
           {pieces.map((p,pidx)=>(
             <motion.div key={p.id} onHoverStart={()=>setHov(p.id)} onHoverEnd={()=>setHov(null)}
               initial={{ opacity:0, y:36 }}
               whileInView={{ opacity:1, y:0 }}
               viewport={{ once:true, margin:'-50px' }}
               transition={{ duration:0.8, delay:pidx*0.1, ease:[0.16,1,0.3,1] }}
-              style={{gridColumn:p.large?'span 2':'span 1',gridRow:p.large?'span 2':'span 1',position:'relative',overflow:'hidden',cursor:'default',background:C.bg2,border:`1px solid ${C.border}`}}
+              style={{gridColumn:p.large?'span 2':'span 1',gridRow:p.large?'span 2':'span 1',position:'relative',overflow:'hidden',cursor:'default',background:C.bg2,border:`1px solid ${C.border}`,aspectRatio:p.large?'1/1':'4/3',minHeight:p.large?240:160}}
               whileHover={{borderColor:C.borderHi}}>
               <motion.img src={p.img} alt={p.t}
                 animate={{scale:hov===p.id?1.06:1,opacity:hov===p.id?.95:.82}} transition={{duration:.8,ease:[.16,1,.3,1]}}
@@ -4403,7 +4554,7 @@ const GalleryPreview = ({ onViewAll }) => {
   const [hov, setHov] = useState(null);
 
   return (
-    <section id="gallery-preview" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
+    <section id="gallery-preview" className="section-pad vmw-gallery-preview" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:56}}>
@@ -4420,16 +4571,19 @@ const GalleryPreview = ({ onViewAll }) => {
         {/* Premium Masonry Showcase */}
         <style>{`
           .preview-masonry { columns: 3; column-gap: 10px; margin-bottom: 48px; }
-          .preview-masonry-item { break-inside: avoid; -webkit-column-break-inside: avoid; margin-bottom: 10px; position: relative; overflow: hidden; border-radius: 8px; border: 1px solid rgba(255,215,0,0.15); cursor: pointer; transition: transform 0.4s, border-color 0.4s; }
+          .preview-masonry-item { break-inside: avoid; -webkit-column-break-inside: avoid; margin-bottom: 10px; position: relative; overflow: hidden; border-radius: 8px; border: 1px solid rgba(255,215,0,0.15); cursor: pointer; transition: transform 0.4s cubic-bezier(0.16,1,0.3,1), border-color 0.4s; }
           .preview-masonry-item:hover { transform: translateY(-4px); border-color: rgba(255,215,0,0.4); }
           .preview-masonry-item img { width: 100%; display: block; filter: sepia(8%); transition: transform 0.8s ease; }
           .preview-masonry-item:hover img { transform: scale(1.08); }
           @media (max-width: 768px) {
-            .preview-masonry { columns: 3; column-gap: 5px; }
-            .preview-masonry-item { margin-bottom: 5px; border-radius: 5px; }
+            .preview-masonry { columns: 2 !important; column-gap: 5px !important; margin-bottom: 28px; }
+            .preview-masonry-item { margin-bottom: 5px !important; border-radius: 6px !important; }
+            .preview-masonry-item:hover { transform: none; }
+            .preview-masonry-item:active { transform: scale(0.97); }
           }
-          @media (max-width: 360px) {
-            .preview-masonry { columns: 2; column-gap: 4px; }
+          @media (max-width: 430px) {
+            .preview-masonry { columns: 2 !important; column-gap: 4px !important; }
+            .preview-masonry-item { margin-bottom: 4px !important; border-radius: 5px !important; }
           }
         `}</style>
         <div className="preview-masonry">
@@ -4449,10 +4603,10 @@ const GalleryPreview = ({ onViewAll }) => {
               <img src={idol.img} alt={idol.deity} />
               <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(14,11,8,0.9) 0%,transparent 60%)',pointerEvents:'none'}}/>
               <motion.div animate={{y:hov===idol.id?0:8, opacity:hov===idol.id?1:0.8}} transition={{duration:0.3}} style={{position:'absolute',bottom:0,left:0,right:0,padding:'24px 20px', zIndex:2, pointerEvents:'none'}}>
-                <div style={{...ff.display,fontSize:18,color:C.text,fontWeight:600,marginBottom:6,textShadow:'0 2px 10px rgba(0,0,0,0.8)'}}>{idol.deity}</div>
-                <div style={{...ff.body,fontSize:10,color:C.gold,letterSpacing:'.2em',textTransform:'uppercase',fontWeight:700}}>{idol.cat}</div>
+                <div className="pm-label" style={{...ff.display,fontSize:18,color:C.text,fontWeight:600,marginBottom:6,textShadow:'0 2px 10px rgba(0,0,0,0.8)'}}>{idol.deity}</div>
+                <div className="pm-cat" style={{...ff.body,fontSize:10,color:C.gold,letterSpacing:'.2em',textTransform:'uppercase',fontWeight:700}}>{idol.cat}</div>
               </motion.div>
-              <div style={{position:'absolute',top:16,left:16,padding:'6px 12px',background:'rgba(0,0,0,0.5)',backdropFilter:'blur(8px)',border:`1px solid rgba(255,215,0,0.3)`,borderRadius:4,color:C.gold,...ff.body,fontSize:9,letterSpacing:'.15em',textTransform:'uppercase',zIndex:2}}>{idol.metal}</div>
+              <div className="pm-badge" style={{position:'absolute',top:16,left:16,padding:'6px 12px',background:'rgba(0,0,0,0.5)',backdropFilter:'blur(8px)',border:`1px solid rgba(255,215,0,0.3)`,borderRadius:4,color:C.gold,...ff.body,fontSize:9,letterSpacing:'.15em',textTransform:'uppercase',zIndex:2}}>{idol.metal}</div>
             </motion.div>
             );
           })}
@@ -4460,7 +4614,7 @@ const GalleryPreview = ({ onViewAll }) => {
 
         {/* Call to action — View Full Gallery */}
         <Reveal delay={.15}>
-          <div style={{display:'flex',gap:14,flexWrap:'wrap',justifyContent:'center',marginTop:44,paddingTop:40,borderTop:`1px solid ${C.border}`}}>
+          <div className="section-cta-row" style={{display:'flex',gap:14,flexWrap:'wrap',justifyContent:'center',marginTop:44,paddingTop:40,borderTop:`1px solid ${C.border}`}}>
             <CurvyButton primary onClick={() => { window.scrollTo({top:0,behavior:'instant'}); navigate('/gallery'); }}>
               View Full Gallery
             </CurvyButton>
