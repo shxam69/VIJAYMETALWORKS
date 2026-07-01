@@ -417,17 +417,30 @@ button{font-family:'Jost',sans-serif;cursor:pointer}
   animation:skeletonShimmer 1.6s ease-in-out infinite;
 }
 /* ─── MOBILE BASE (≤768px) ─────────────────────────────────── */
+/* ─── DESKTOP DEFAULTS (moved from inline to CSS) ──────────── */
+.section-pad { padding: 120px 56px; }
+.two-col { grid-template-columns: 1fr 1fr; }
+.vmw-services-card { grid-template-columns: 1fr 1.5fr; }
+.vmw-services-right { padding: 44px 48px; }
+.footer-cols { grid-template-columns: repeat(3,1fr); }
+.vmw-footer-btns { grid-template-columns: repeat(4,1fr); }
+.vmw-footer { padding: 76px 56px 44px; }
+.vmw-process-grid { grid-template-columns: 1fr 80px 1fr; }
+
 @media(max-width:768px){
   /* Navigation */
   .nav-desktop{display:none!important}
   .mobile-sticky-bar{display:flex!important}
+  /* Section padding — now works because inline padding is gone */
+  .section-pad{padding:72px 20px!important}
   /* Layout helpers */
   .hero-3d{width:160px!important;height:160px!important}
   .two-col{grid-template-columns:1fr!important;gap:36px!important}
-  .section-pad{padding:72px 20px 72px!important}
   .archive-grid{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:auto!important}
   .gallery-grid{grid-template-columns:repeat(2,1fr)!important;gap:5px!important}
-  .footer-cols{grid-template-columns:1fr!important;gap:28px!important}
+  .footer-cols{grid-template-columns:1fr!important;gap:20px!important}
+  .vmw-footer-btns{grid-template-columns:repeat(2,1fr)!important;gap:5px!important;max-width:100%!important}
+  .vmw-footer{padding:60px 20px 100px!important}
   .wa-fab{bottom:90px!important}
   /* Global masonry */
   .gallery-masonry{columns:2;column-gap:5px}
@@ -436,147 +449,72 @@ button{font-family:'Jost',sans-serif;cursor:pointer}
   /* ── Hero ── */
   #home{min-height:100svh!important}
   #home h1{letter-spacing:.02em!important}
-  /* Logo on hero */
-  #home .vmw-hero-logo{
-    width:160px!important;
-    height:160px!important;
-  }
-  #home .vmw-hero-logo-img{
-    width:130px!important;
-    height:130px!important;
-  }
+  #home .vmw-hero-logo{width:160px!important;height:160px!important}
 
   /* ── Legacy stats grid: 2×2 on mobile ── */
-  .vmw-stats-grid{
-    display:grid!important;
-    grid-template-columns:1fr 1fr!important;
-    gap:2px!important;
-  }
+  .vmw-stats-grid{grid-template-columns:1fr 1fr!important;gap:2px!important}
   .vmw-stats-grid .stat-card{padding:36px 18px 32px!important}
   .vmw-stats-grid .stat-number{font-size:clamp(38px,9vw,58px)!important}
   .vmw-stats-grid .stat-label{font-size:9px!important;letter-spacing:.14em!important}
 
-  /* ── Trusted by Temples: 2×2 scroll grid ── */
-  .vmw-temples-grid{
-    display:grid!important;
-    grid-template-columns:repeat(2,1fr)!important;
-    gap:5px!important;
-  }
+  /* ── Trusted by Temples: 2×2 grid ── */
+  .vmw-temples-grid{grid-template-columns:repeat(2,1fr)!important;gap:5px!important}
 
-  /* ── Services grid ── */
-  .vmw-services-grid{
-    grid-template-columns:1fr!important;
-    gap:12px!important;
-  }
-
-  /* ── Showcase section ── */
-  #showcase{padding:72px 20px!important}
-  #showcase .two-col{gap:40px!important}
+  /* ── Services: stack to single column ── */
+  .vmw-services-card{grid-template-columns:1fr!important;min-height:auto!important}
+  .vmw-services-card > div:first-child{min-height:220px!important}
+  .vmw-services-right{padding:24px 20px!important}
 
   /* ── RealWorkPhotos grid ── */
-  .vmw-work-grid{
-    grid-template-columns:repeat(2,1fr)!important;
-    gap:5px!important;
-  }
+  .vmw-work-grid{grid-template-columns:repeat(2,1fr)!important;gap:5px!important}
 
-  /* ── Preview masonry (Our Sacred Craftsmanship) ── */
-  .preview-masonry{
-    columns:2!important;
-    column-gap:5px!important;
-  }
-  .preview-masonry-item{
-    margin-bottom:5px!important;
-    border-radius:6px!important;
-  }
-  .preview-masonry-item .pm-label{font-size:14px!important}
-  .preview-masonry-item .pm-cat{font-size:8px!important}
-  .preview-masonry-item .pm-badge{font-size:8px!important;padding:4px 8px!important}
+  /* ── Preview masonry (Our Sacred Craftsmanship) — 3 columns ── */
+  .preview-masonry{columns:3!important;column-gap:4px!important}
+  .preview-masonry-item{margin-bottom:4px!important;border-radius:5px!important}
+  .preview-masonry-item:hover{transform:none!important}
+  .preview-masonry-item:active{transform:scale(0.97)!important}
+  .preview-masonry-item .pm-label{font-size:11px!important}
+  .preview-masonry-item .pm-cat{font-size:7px!important}
+  .preview-masonry-item .pm-badge{font-size:7px!important;padding:3px 6px!important;top:8px!important;left:8px!important}
 
-  /* ── Testimonials grid ── */
-  .vmw-testimonials-grid{
-    grid-template-columns:repeat(2,1fr)!important;
-    gap:5px!important;
-  }
-  .vmw-testimonials-section{padding:72px 20px!important}
-  /* Featured testimonial on mobile */
-  .vmw-featured-testimonial{
-    padding:28px 18px!important;
-  }
-  .vmw-featured-testimonial p{
-    font-size:16px!important;
-  }
+  /* ── Testimonials ── */
+  .vmw-testimonials-grid{grid-template-columns:repeat(2,1fr)!important;gap:5px!important}
+  .vmw-featured-testimonial{padding:24px 16px!important}
+  .vmw-featured-testimonial p[style]{font-size:15px!important}
 
-  /* ── CTA buttons ── */
-  .vmw-cta-row{
-    flex-direction:column!important;
-    align-items:stretch!important;
-    gap:12px!important;
-  }
-  .vmw-cta-row .vmw-btn-primary,
-  .vmw-cta-row .vmw-btn-secondary{
-    width:100%!important;
-    justify-content:center!important;
-    padding:14px 24px!important;
-  }
-
-  /* ── SectionCTA ── */
-  .section-cta-row{
-    flex-direction:column!important;
-    align-items:stretch!important;
-    gap:12px!important;
-    width:100%!important;
-  }
-  .section-cta-row > *{width:100%!important;justify-content:center!important}
-
-  /* ── StarBorderButton ── */
-  .star-border-btn{width:100%!important;text-align:center!important}
-  .star-border-btn > div:last-child{justify-content:center!important}
-
-  /* ── Process timeline ── */
-  .vmw-process-section{padding:72px 20px!important}
+  /* ── Process timeline: 2-col (node + content) ── */
+  .vmw-process-grid{grid-template-columns:56px 1fr!important;gap:0!important}
+  .vmw-process-img{display:none!important}
+  .vmw-process-node{grid-column:1!important;grid-row:1!important}
+  .vmw-process-content{grid-column:2!important;grid-row:1!important;padding:0 0 0 16px!important}
+  .vmw-process-content > div{padding:20px 16px!important}
 
   /* ── Archive ── */
-  .vmw-archive-section{padding:72px 20px!important}
-  .vmw-archive-image-strip{height:100px!important}
-  .archive-grid{
-    grid-template-columns:repeat(2,1fr)!important;
-    grid-template-rows:auto!important;
-  }
-  .archive-grid > *[style*="span 2"]{
-    grid-column:span 1!important;
-    grid-row:span 1!important;
-    aspect-ratio:4/3!important;
-    min-height:140px!important;
-  }
+  .archive-grid{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:auto!important}
 
-  /* ── Contact ── */
+  /* ── SectionCTA buttons ── */
+  .section-cta-row{flex-direction:column!important;align-items:stretch!important;gap:10px!important;width:100%!important}
+  .section-cta-row > *{width:100%!important;justify-content:center!important;text-align:center!important}
+
+  /* ── Contact form ── */
   .vmw-contact-grid{grid-template-columns:1fr!important;gap:32px!important}
-
-  /* ── FAQ ── */
-  .vmw-faq-section{padding:72px 20px!important}
-  .vmw-faq-grid{grid-template-columns:1fr!important;gap:0!important}
-
-  /* ── Footer ── */
-  .vmw-footer{padding:60px 20px 100px!important}
 }
 
 /* ─── SMALL MOBILE (≤430px) ────────────────────────────────── */
 @media(max-width:430px){
-  .section-pad{padding:60px 16px!important}
-  .preview-masonry{columns:2!important;column-gap:4px!important}
-  .preview-masonry-item{margin-bottom:4px!important}
-  .vmw-stats-grid .stat-number{font-size:clamp(34px,10vw,52px)!important}
-  .vmw-temples-grid{grid-template-columns:repeat(2,1fr)!important;gap:4px!important}
-  .vmw-work-grid{grid-template-columns:repeat(2,1fr)!important;gap:4px!important}
-  .vmw-testimonials-grid{grid-template-columns:1fr 1fr!important;gap:4px!important}
+  .section-pad{padding:56px 14px!important}
+  .preview-masonry{columns:3!important;column-gap:3px!important}
+  .preview-masonry-item{margin-bottom:3px!important}
+  .vmw-stats-grid .stat-number{font-size:clamp(32px,10vw,48px)!important}
+  .vmw-temples-grid{gap:4px!important}
+  .vmw-work-grid{gap:4px!important}
+  .vmw-testimonials-grid{gap:4px!important}
   #home h1{font-size:clamp(36px,10vw,56px)!important}
+  .vmw-footer-btns{grid-template-columns:repeat(2,1fr)!important}
 }
 
 /* ─── ANIMATIONS safe for mobile ────────────────────────────── */
 @media(max-width:768px){
-  /* Ensure motion doesn't overflow — use clip instead of overflow:hidden on wrappers */
-  .motion-safe{overflow:visible!important}
-  /* Reduce parallax range so content stays fully in view */
   .vmw-parallax{will-change:transform}
 }
 
@@ -588,17 +526,6 @@ img{image-rendering:auto;-webkit-image-rendering:auto}
   color:#FFD700 !important;
   text-shadow:0 1px 2px rgba(0,0,0,.8);
   mix-blend-mode:screen;
-}
-
-/* ── Process timeline mobile ── */
-@media (max-width: 768px) {
-  .vmw-process-grid {
-    grid-template-columns: 40px 1fr !important;
-    gap: 0 !important;
-  }
-  .vmw-process-img { display:none !important; }
-  .vmw-process-node { grid-column:1 !important; }
-  .vmw-process-content { grid-column:2 !important; padding-left:16px !important; padding-right:0 !important; }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -1981,9 +1908,9 @@ const Legacy = () => {
     { n:'24K',  l:'Gold Certified',      icon:'✦' },
   ];
   return (
-    <section id="legacy" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg2}}>
+    <section id="legacy" className="section-pad" style={{position:'relative',zIndex:2,background:C.bg2}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
-        <div className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:96,alignItems:'center',marginBottom:88}}>
+        <div className="two-col" style={{display:'grid',gap:96,alignItems:'center',marginBottom:88}}>
           <SlideLeft>
             <span style={{...ff.body,fontSize:8,letterSpacing:'.52em',color:C.dim,fontWeight:600,textTransform:'uppercase',display:'block',marginBottom:18,opacity:.8}}>The Bloodline of Art</span>
             <h2 style={{...ff.display,fontSize:'clamp(34px,5.8vw,70px)',lineHeight:.88,letterSpacing:'.04em',color:C.text,fontWeight:700,marginBottom:28}}>OVER A<br/><span style={{color:C.gold}}>CENTURY</span><br/>OF DEVOTION</h2>
@@ -2087,7 +2014,7 @@ const TrustedByTemples = () => {
     { name:'Kapaleeswarar', loc:'Chennai', img:'/gallery/temple/temple.jpg' },
   ];
   return (
-    <section style={{position:'relative',zIndex:2,padding:'100px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}} className="section-pad vmw-temples-section">
+    <section style={{position:'relative',zIndex:2,background:C.bg3,borderTop:`1px solid ${C.border}`}} className="section-pad vmw-temples-section">
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:56}}>
@@ -2202,7 +2129,7 @@ const Services = () => {
   ];
   const m = metals[active];
   return (
-    <section id="services" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg1}}>
+    <section id="services" className="section-pad" style={{position:'relative',zIndex:2,background:C.bg1}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:64}}>
@@ -2231,7 +2158,7 @@ const Services = () => {
         </div>
         <AnimatePresence mode="wait">
           <motion.div key={active} initial={{opacity:0,y:18}} animate={{opacity:1,y:0}} exit={{opacity:0,y:-18}} transition={{duration:.55,ease:[.16,1,.3,1]}}
-            className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1.5fr',border:`1px solid ${C.border}`,minHeight:500}}>
+            className="two-col vmw-services-card" style={{display:'grid',gridTemplateColumns:'1fr 1.5fr',border:`1px solid ${C.border}`,minHeight:500}}>
             <div style={{position:'relative',overflow:'hidden',minHeight:380}}>
               <img src={m.img} alt={m.name} style={{position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover',opacity:.5,filter:'sepia(18%)'}}/>
               <div style={{position:'absolute',inset:0,background:'linear-gradient(to right,transparent 40%,rgba(20,18,16,.92) 100%)'}}/>
@@ -2242,7 +2169,7 @@ const Services = () => {
                 <div style={{...ff.serif,fontSize:13,lineHeight:1.85,color:C.dim,fontStyle:'italic',maxWidth:220}}>{m.desc}</div>
               </div>
             </div>
-            <div style={{padding:'44px 48px',display:'flex',flexDirection:'column'}}>
+            <div className="vmw-services-right" style={{padding:'44px 48px',display:'flex',flexDirection:'column'}}>
               {m.services.map((s,i)=>(
                 <div key={s.t} style={{borderBottom:`1px solid ${C.border}`,padding:'22px 0',...(i===m.services.length-1?{borderBottom:'none'}:{})}}>
                   <div style={{display:'flex',gap:16,alignItems:'flex-start'}}>
@@ -2273,9 +2200,9 @@ const Showcase = () => {
   const navigate = useNavigate();
   const { setShowCommissionModal } = useAppCtx();
   return (
-  <section id="showcase" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
+  <section id="showcase" className="section-pad" style={{position:'relative',zIndex:2,background:C.bg3,borderTop:`1px solid ${C.border}`}}>
     <div style={{maxWidth:1240,margin:'0 auto'}}>
-      <div className="two-col" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:80,alignItems:'center'}}>
+      <div className="two-col" style={{display:'grid',gap:80,alignItems:'center'}}>
         <SlideLeft>
           <span style={{...ff.body,fontSize:8,letterSpacing:'.52em',color:C.dim,fontWeight:600,textTransform:'uppercase',display:'block',marginBottom:18,opacity:.8}}>Masterpiece Gallery</span>
           <h2 style={{...ff.display,fontSize:'clamp(30px,5vw,62px)',lineHeight:.9,letterSpacing:'.04em',color:C.text,fontWeight:700,marginBottom:24}}>OUR SACRED<br/><span style={{color:C.gold}}>CRAFT</span></h2>
@@ -2326,7 +2253,7 @@ const RealWorkPhotos = () => {
     { img:'/gallery/temple/god.jpg',         label:'Panchaloha Vigraham', desc:'Authentic Panchaloha deity — cast and finished to full Agamic temple specifications, 2023.' },
   ];
   return (
-    <section style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}} className="section-pad vmw-realwork-section">
+    <section style={{position:'relative',zIndex:2,background:C.bg2,borderTop:`1px solid ${C.border}`}} className="section-pad vmw-realwork-section">
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:60}}>
@@ -2436,7 +2363,7 @@ const ProcessSection = () => {
   ];
 
   return (
-    <section style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg1,borderTop:`1px solid ${C.border}`}}>
+    <section className="section-pad vmw-process-section" style={{position:'relative',zIndex:2,background:C.bg1,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
 
         {/* Header */}
@@ -2484,13 +2411,13 @@ const ProcessSection = () => {
             return (
               <motion.div
                 key={step.n}
+                className="vmw-process-grid"
                 initial={{ opacity:0, x: isLeft ? -48 : 48 }}
                 whileInView={{ opacity:1, x:0 }}
                 viewport={{ once:true, margin:'-60px' }}
                 transition={{ duration:0.78, delay:0.06, ease:[0.16,1,0.3,1] }}
                 style={{
                   display:'grid',
-                  gridTemplateColumns:'1fr 80px 1fr',
                   alignItems:'center',
                   gap:0,
                   marginBottom: i < steps.length - 1 ? 48 : 0,
@@ -3844,7 +3771,7 @@ const Testimonials = () => {
   const t = testimonials[active];
 
   return (
-    <section id="testimonials" className="section-pad vmw-testimonials-section" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
+    <section id="testimonials" className="section-pad vmw-testimonials-section" style={{position:'relative',zIndex:2,background:C.bg3,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:64}}>
@@ -3954,7 +3881,7 @@ const FAQ = () => {
   ];
 
   return (
-    <section id="faq" className="section-pad vmw-faq-section" style={{position:'relative',zIndex:2,padding:'120px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
+    <section id="faq" className="section-pad vmw-faq-section" style={{position:'relative',zIndex:2,background:C.bg2,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:960,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:56}}>
@@ -4026,7 +3953,7 @@ const Archive = () => {
     { id:5, t:'Temple Vigraham', s:'All Metals · All Crafts', img:'/gallery/temple/god.jpg', tag:'Vigraham' },
   ];
   return (
-    <section id="archive" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg1}}>
+    <section id="archive" className="section-pad" style={{position:'relative',zIndex:2,background:C.bg1}}>
       <div style={{maxWidth:1400,margin:'0 auto'}}>
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-end',marginBottom:52,flexWrap:'wrap',gap:20}}>
           <SlideLeft>
@@ -4227,7 +4154,7 @@ const Contact = () => {
 
 
   return (
-    <section id="contact" className="section-pad" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg3,borderTop:`1px solid ${C.border}`}}>
+    <section id="contact" className="section-pad" style={{position:'relative',zIndex:2,background:C.bg3,borderTop:`1px solid ${C.border}`}}>
 
       {/* ── Success Popup ── */}
       <AnimatePresence>
@@ -4331,7 +4258,7 @@ const Contact = () => {
 const Footer = () => {
   const C = useTheme();
   return (
-  <footer style={{position:'relative',zIndex:2,padding:'76px 56px 44px',background:C.bg1,borderTop:`1px solid ${C.border}`,textAlign:'center'}}>
+  <footer className="vmw-footer" style={{position:'relative',zIndex:2,background:C.bg1,borderTop:`1px solid ${C.border}`,textAlign:'center'}}>
     <FadeIn duration={1.1}>
     <div style={{maxWidth:960,margin:'0 auto'}}>
       <div style={{display:'flex',justifyContent:'center',marginBottom:20}}>
@@ -4346,7 +4273,7 @@ const Footer = () => {
       <GoldRule my={28}/>
 
       {/* Footer Quick Contact Buttons — enhanced */}
-      <div style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:40,maxWidth:720,margin:'0 auto 40px'}}>
+      <div className="vmw-footer-btns" style={{display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:6,marginBottom:40,maxWidth:720,margin:'0 auto 40px'}}>
         {[
           { icon:'📞', label:'Call Now', sub:BIZ.phone, action:()=>window.open(`tel:${BIZ.phoneTel}`), highlight:false },
           { icon:'💬', label:'WhatsApp', sub:'Chat Instantly', action:()=>window.open(BIZ.whatsapp), highlight:true },
@@ -4367,7 +4294,7 @@ const Footer = () => {
         ))}
       </div>
 
-      <div className="footer-cols" style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:24,marginBottom:28,textAlign:'left'}}>
+      <div className="footer-cols" style={{display:'grid',gap:24,marginBottom:28,textAlign:'left'}}>
         {[
           { h:'Address', lines:[BIZ.address] },
           { h:'Contact', lines:[BIZ.phone, BIZ.email] },
@@ -4554,7 +4481,7 @@ const GalleryPreview = ({ onViewAll }) => {
   const [hov, setHov] = useState(null);
 
   return (
-    <section id="gallery-preview" className="section-pad vmw-gallery-preview" style={{position:'relative',zIndex:2,padding:'140px 56px',background:C.bg2,borderTop:`1px solid ${C.border}`}}>
+    <section id="gallery-preview" className="section-pad vmw-gallery-preview" style={{position:'relative',zIndex:2,background:C.bg2,borderTop:`1px solid ${C.border}`}}>
       <div style={{maxWidth:1240,margin:'0 auto'}}>
         <Reveal>
           <div style={{textAlign:'center',marginBottom:56}}>
@@ -4575,16 +4502,6 @@ const GalleryPreview = ({ onViewAll }) => {
           .preview-masonry-item:hover { transform: translateY(-4px); border-color: rgba(255,215,0,0.4); }
           .preview-masonry-item img { width: 100%; display: block; filter: sepia(8%); transition: transform 0.8s ease; }
           .preview-masonry-item:hover img { transform: scale(1.08); }
-          @media (max-width: 768px) {
-            .preview-masonry { columns: 2 !important; column-gap: 5px !important; margin-bottom: 28px; }
-            .preview-masonry-item { margin-bottom: 5px !important; border-radius: 6px !important; }
-            .preview-masonry-item:hover { transform: none; }
-            .preview-masonry-item:active { transform: scale(0.97); }
-          }
-          @media (max-width: 430px) {
-            .preview-masonry { columns: 2 !important; column-gap: 4px !important; }
-            .preview-masonry-item { margin-bottom: 4px !important; border-radius: 5px !important; }
-          }
         `}</style>
         <div className="preview-masonry">
           {featured.map((idol,idx)=>{
