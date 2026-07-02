@@ -490,6 +490,9 @@ button{font-family:'Jost',sans-serif;cursor:pointer}
   .vmw-process-content > div{padding:20px 16px!important}
   /* disable GPU-heavy filters on mobile process section */
   .vmw-process-section *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;will-change:auto!important}
+  /* reposition spine to sit inside the 56px node column, not at 50% of full width */
+  .vmw-process-spine{left:28px!important;transform:none!important}
+  .vmw-process-spine-animated{display:none!important}
 
   /* ── Archive ── */
   .archive-grid{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:auto!important}
@@ -2399,7 +2402,7 @@ const ProcessSection = () => {
         <div style={{position:'relative'}}>
 
           {/* Central vertical spine */}
-          <div style={{
+          <div className="vmw-process-spine" style={{
             position:'absolute', left:'50%', top:40, bottom:40,
             width:1,
             background:`linear-gradient(to bottom, transparent 0%, ${C.gold}40 12%, ${C.gold}28 88%, transparent 100%)`,
@@ -2408,6 +2411,7 @@ const ProcessSection = () => {
           }}/>
           
           <motion.div
+            className="vmw-process-spine-animated"
             initial={{ height: 0 }}
             whileInView={{ height: '100%' }}
             viewport={{ once: true, margin: '-20%' }}
