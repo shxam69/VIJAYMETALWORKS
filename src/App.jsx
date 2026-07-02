@@ -488,6 +488,8 @@ button{font-family:'Jost',sans-serif;cursor:pointer}
   .vmw-process-node{grid-column:1!important;grid-row:1!important}
   .vmw-process-content{grid-column:2!important;grid-row:1!important;padding:0 0 0 16px!important}
   .vmw-process-content > div{padding:20px 16px!important}
+  /* disable GPU-heavy filters on mobile process section */
+  .vmw-process-section *{-webkit-backdrop-filter:none!important;backdrop-filter:none!important;will-change:auto!important}
 
   /* ── Archive ── */
   .archive-grid{grid-template-columns:repeat(2,1fr)!important;grid-template-rows:auto!important}
@@ -1129,14 +1131,26 @@ const Loader = ({ onDone }) => {
   const BRAND = 'VIJAY METAL WORKS';
   const letters = BRAND.split('');
 
+  // On mobile, skip the full splash — show briefly and exit fast
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+
   useEffect(()=>{
+    if (isMobile) {
+      // Mobile: fast splash — phase straight to exit in ~800ms total
+      const t1 = setTimeout(()=>setPhase(1), 80);
+      const t2 = setTimeout(()=>setPhase(2), 220);
+      const t3 = setTimeout(()=>setPhase(3), 520);
+      const t4 = setTimeout(()=>setPhase(4), 900);
+      const t5 = setTimeout(()=>onDone(), 1100);
+      return()=>{ [t1,t2,t3,t4,t5].forEach(clearTimeout); };
+    }
     const t1 = setTimeout(()=>setPhase(1), 180);
     const t2 = setTimeout(()=>setPhase(2), 520);
     const t3 = setTimeout(()=>setPhase(3), 1380);
     const t4 = setTimeout(()=>setPhase(4), 2600);
     const t5 = setTimeout(()=>onDone(), 3100);
     return()=>{ [t1,t2,t3,t4,t5].forEach(clearTimeout); };
-  },[onDone]);
+  },[onDone, isMobile]);
 
   // Percentage counter tied to phase 3
   useEffect(()=>{
@@ -2353,6 +2367,8 @@ const ProcessIcon = ({ n, icon, gold, dim, border, surfaceGold }) => (
 const ProcessSection = () => {
   const C = useTheme();
   const { setShowCommissionModal } = useAppCtx();
+  // Detect mobile to skip heavy animations
+  const isMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
   const steps = [
     { n:'01', title:'Initial Inquiry',       icon:'💬', img:'/gallery/gold/crown.jpg',          desc:'Share your requirement via WhatsApp or our contact form — temple name, deity, dimensions, metal preference, and timeline.' },
     { n:'02', title:'Design Consultation',   icon:'✏️', img:'/gallery/gold/crown1.jpg',         desc:'Our master craftsmen discuss design specifications, iconographic details per Agamic tradition, and provide a detailed quotation.' },
@@ -2395,7 +2411,7 @@ const ProcessSection = () => {
             initial={{ height: 0 }}
             whileInView={{ height: '100%' }}
             viewport={{ once: true, margin: '-20%' }}
-            transition={{ duration: 2.5, ease: 'easeInOut' }}
+            transition={{ duration: isMobile ? 0.01 : 2.5, ease: 'easeInOut' }}
             style={{
               position:'absolute', left:'50%', top:40,
               width:2,
@@ -2412,10 +2428,10 @@ const ProcessSection = () => {
               <motion.div
                 key={step.n}
                 className="vmw-process-grid"
-                initial={{ opacity:0, x: isLeft ? -48 : 48 }}
+                initial={{ opacity:0, x: isMobile ? 0 : (isLeft ? -48 : 48) }}
                 whileInView={{ opacity:1, x:0 }}
                 viewport={{ once:true, margin:'-60px' }}
-                transition={{ duration:0.78, delay:0.06, ease:[0.16,1,0.3,1] }}
+                transition={{ duration: isMobile ? 0.4 : 0.78, delay: isMobile ? 0 : 0.06, ease:[0.16,1,0.3,1] }}
                 style={{
                   display:'grid',
                   alignItems:'center',
@@ -2434,13 +2450,13 @@ const ProcessSection = () => {
                   {isLeft ? (
                     /* Content block */
                     <motion.div
-                      whileHover={{ x:-4 }}
+                      whileHover={isMobile ? undefined : { x:-4 }}
                       transition={{ duration:.28 }}
                       style={{
                         padding:'36px 40px',
                         background: C.surfaceWarm,
                         border:`1px solid ${C.border}`,
-                        backdropFilter:'blur(8px)',
+                        backdropFilter: isMobile ? 'none' : 'blur(8px)',
                         position:'relative',
                         overflow:'hidden',
                       }}
@@ -2465,6 +2481,13 @@ const ProcessSection = () => {
                   zIndex:2, position:'relative',
                 }}>
                   {/* Node glow */}
+                  {isMobile ? (
+                    <ProcessIcon
+                      n={step.n} icon={step.icon}
+                      gold={C.gold} dim={C.dim}
+                      border={C.borderGold} surfaceGold={C.surfaceGold}
+                    />
+                  ) : (
                   <motion.div
                     animate={{ boxShadow:[
                       `0 0 0 0 rgba(255,215,0,0)`,
@@ -2480,6 +2503,7 @@ const ProcessSection = () => {
                       border={C.borderGold} surfaceGold={C.surfaceGold}
                     />
                   </motion.div>
+                  )}
                 </div>
 
                 {/* Right cell */}
@@ -2495,13 +2519,13 @@ const ProcessSection = () => {
                   ) : (
                     /* Content block */
                     <motion.div
-                      whileHover={{ x:4 }}
+                      whileHover={isMobile ? undefined : { x:4 }}
                       transition={{ duration:.28 }}
                       style={{
                         padding:'36px 40px',
                         background: C.surfaceWarm,
                         border:`1px solid ${C.border}`,
-                        backdropFilter:'blur(8px)',
+                        backdropFilter: isMobile ? 'none' : 'blur(8px)',
                         position:'relative',
                         overflow:'hidden',
                       }}
