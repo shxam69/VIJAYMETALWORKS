@@ -467,8 +467,12 @@ button{font-family:'Jost',sans-serif;cursor:pointer}
 
   /* ── RealWorkPhotos grid ── */
   .vmw-work-grid{grid-template-columns:repeat(2,1fr)!important;gap:5px!important}
-  /* on touch devices text is always visible — no hover state to reveal it */
-  .vmw-realwork-section .work-card-text{opacity:1!important;transform:none!important}
+  /* square cards on mobile give enough height for both label + description */
+  .vmw-realwork-section .work-photo-card{aspect-ratio:1/1!important}
+  /* tighter padding so text fits inside the card */
+  .vmw-realwork-section .work-card-text{padding:12px 10px!important;opacity:1!important;transform:none!important}
+  .vmw-realwork-section .work-card-label{font-size:12px!important;margin-bottom:4px!important;line-height:1.2!important}
+  .vmw-realwork-section .work-card-desc{font-size:8px!important;line-height:1.5!important}
 
   /* ── Preview masonry (Our Sacred Craftsmanship) — 3 columns ── */
   .preview-masonry{columns:3!important;column-gap:4px!important}
@@ -2310,6 +2314,7 @@ const WorkPhotoCard = ({ photo }) => {
   return (
     <motion.div onHoverStart={()=>setHov(true)} onHoverEnd={()=>setHov(false)}
       whileHover={{borderColor:C.borderHi}}
+      className="work-photo-card"
       style={{position:'relative',overflow:'hidden',aspectRatio:'4/3',border:`1px solid ${C.border}`,cursor:'default',transition:'border-color .3s',background:C.bg1}}>
       {!loaded && (
         <div className="skeleton" style={{position:'absolute',inset:0,zIndex:2}}/>
@@ -2321,8 +2326,8 @@ const WorkPhotoCard = ({ photo }) => {
       <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(5,4,2,.96) 0%,rgba(5,4,2,.55) 45%,transparent 70%)',pointerEvents:'none'}}/>
       <motion.div className="work-card-text" animate={{y:hov?0:6,opacity:hov?1:.7}} transition={{duration:.32}}
         style={{position:'absolute',bottom:0,left:0,right:0,padding:'20px 22px'}}>
-        <div style={{...ff.display,fontSize:15,color:'#ffffff',fontWeight:700,marginBottom:6,textShadow:'0 1px 8px rgba(0,0,0,0.9)'}}>{photo.label}</div>
-        <div style={{...ff.body,fontSize:9,color:'rgba(255,255,255,0.82)',letterSpacing:'.08em',lineHeight:1.6,textShadow:'0 1px 6px rgba(0,0,0,0.95)'}}>{photo.desc}</div>
+        <div className="work-card-label" style={{...ff.display,fontSize:15,color:'#ffffff',fontWeight:700,marginBottom:6,textShadow:'0 1px 8px rgba(0,0,0,0.9)'}}>{photo.label}</div>
+        <div className="work-card-desc" style={{...ff.body,fontSize:9,color:'rgba(255,255,255,0.82)',letterSpacing:'.08em',lineHeight:1.6,textShadow:'0 1px 6px rgba(0,0,0,0.95)'}}>{photo.desc}</div>
       </motion.div>
       {/* Corner diamond */}
       <div style={{position:'absolute',top:12,right:12,width:12,height:12,border:`1px solid ${C.borderHi}`,opacity:hov?.5:.18,transition:'opacity .3s',transform:'rotate(45deg)'}}/>
