@@ -467,6 +467,8 @@ button{font-family:'Jost',sans-serif;cursor:pointer}
 
   /* ── RealWorkPhotos grid ── */
   .vmw-work-grid{grid-template-columns:repeat(2,1fr)!important;gap:5px!important}
+  /* on touch devices text is always visible — no hover state to reveal it */
+  .vmw-realwork-section .work-card-text{opacity:1!important;transform:none!important}
 
   /* ── Preview masonry (Our Sacred Craftsmanship) — 3 columns ── */
   .preview-masonry{columns:3!important;column-gap:4px!important}
@@ -2316,11 +2318,11 @@ const WorkPhotoCard = ({ photo }) => {
         animate={{scale:hov?1.06:1,opacity:hov?.95:.85}}
         transition={{duration:.8,ease:[.16,1,.3,1]}}
         style={{width:'100%',height:'100%',objectFit:'cover',filter:'sepia(10%)',display:'block'}}/>
-      <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(14,12,10,.88) 0%,transparent 55%)',pointerEvents:'none'}}/>
-      <motion.div animate={{y:hov?0:6,opacity:hov?1:.7}} transition={{duration:.32}}
+      <div style={{position:'absolute',inset:0,background:'linear-gradient(to top,rgba(5,4,2,.96) 0%,rgba(5,4,2,.55) 45%,transparent 70%)',pointerEvents:'none'}}/>
+      <motion.div className="work-card-text" animate={{y:hov?0:6,opacity:hov?1:.7}} transition={{duration:.32}}
         style={{position:'absolute',bottom:0,left:0,right:0,padding:'20px 22px'}}>
-        <div style={{...ff.display,fontSize:15,color:C.text,fontWeight:600,marginBottom:6}}>{photo.label}</div>
-        <div style={{...ff.body,fontSize:9,color:C.dim,letterSpacing:'.08em',lineHeight:1.6}}>{photo.desc}</div>
+        <div style={{...ff.display,fontSize:15,color:'#ffffff',fontWeight:700,marginBottom:6,textShadow:'0 1px 8px rgba(0,0,0,0.9)'}}>{photo.label}</div>
+        <div style={{...ff.body,fontSize:9,color:'rgba(255,255,255,0.82)',letterSpacing:'.08em',lineHeight:1.6,textShadow:'0 1px 6px rgba(0,0,0,0.95)'}}>{photo.desc}</div>
       </motion.div>
       {/* Corner diamond */}
       <div style={{position:'absolute',top:12,right:12,width:12,height:12,border:`1px solid ${C.borderHi}`,opacity:hov?.5:.18,transition:'opacity .3s',transform:'rotate(45deg)'}}/>
