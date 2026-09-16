@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+const fs = require("fs");
+
+const newAppCode = `import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 
@@ -31,7 +33,7 @@ function AppContent() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [user, setUser] = useState(null);
 
-  // -- Visitor Tracking ï¿½ logs each visit to Supabase analytics_events with location --
+  // -- Visitor Tracking — logs each visit to Supabase analytics_events with location --
   useEffect(() => {
     const trackVisit = async () => {
       const supabaseUrl = process.env.REACT_APP_SUPABASE_URL;
@@ -42,11 +44,11 @@ function AppContent() {
       try {
         const geoRes = await fetch('https://ipapi.co/json/');
         const geo = geoRes.ok ? await geoRes.json() : {};
-        await fetch(`${supabaseUrl}/rest/v1/analytics_events`, {
+        await fetch(\`\${supabaseUrl}/rest/v1/analytics_events\`, {
           method: 'POST',
           headers: {
             'apikey': supabaseKey,
-            'Authorization': `Bearer ${supabaseKey}`,
+            'Authorization': \`Bearer \${supabaseKey}\`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
@@ -172,3 +174,7 @@ export default function App() {
     </ErrorBoundary>
   );
 }
+`;
+
+fs.writeFileSync("src/App.jsx", newAppCode);
+console.log("Rewrote src/App.jsx into clean modular root component (160 lines)!");

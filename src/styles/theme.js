@@ -1,0 +1,26 @@
+/* ---------------------------------------------------------------
+   THEME SYSTEM � Light & Dark Luxury Palettes
+--------------------------------------------------------------- */
+const THEMES = {
+  dark: {
+    gold:"#FFD700",goldLt:"#FFE44D",goldDk:"#CC9900",
+    goldGrad:"linear-gradient(135deg,#CC9900 0%,#FFD700 38%,#FFE44D 62%,#FFD700 100%)",
+    bg1:"#080604",bg2:"#0E0B08",bg3:"#111008",
+    border:"rgba(255,255,255,0.09)",borderHi:"rgba(255,255,255,0.18)",borderGold:"rgba(255,215,0,0.25)",
+    text:"rgba(255,255,255,0.92)",dim:"rgba(255,255,255,0.65)",faint:"rgba(255,255,255,0.35)",
+    surfaceGold:"rgba(255,215,0,0.06)",surfaceWarm:"rgba(255,220,160,0.04)",
+    loaderBg:"#050402",navBg:"rgba(8,6,4,0.97)",isDark:true,
+  },
+  light: {
+    gold:"#B8860B",goldLt:"#DAA520",goldDk:"#8B6508",
+    goldGrad:"linear-gradient(135deg,#8B6508 0%,#B8860B 38%,#DAA520 62%,#B8860B 100%)",
+    bg1:"#F5F0E8",bg2:"#EDE7D8",bg3:"#E5DEC8",
+    border:"rgba(100,70,20,0.16)",borderHi:"rgba(100,70,20,0.30)",borderGold:"rgba(184,134,11,0.35)",
+    text:"rgba(15,9,2,0.92)",dim:"rgba(15,9,2,0.68)",faint:"rgba(15,9,2,0.40)",
+    surfaceGold:"rgba(184,134,11,0.08)",surfaceWarm:"rgba(180,140,60,0.06)",
+    loaderBg:"#F0EAD8",navBg:"rgba(245,240,232,0.94)",isDark:false,
+  },
+};
+
+export { THEMES };
+export default THEMES;
