@@ -1,0 +1,15 @@
+{
+  "short_name": "VMW Admin",
+  "name": "Vijay Metal Works Admin Dashboard",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#0a0806",
+  "background_color": "#0a0806"
+}
