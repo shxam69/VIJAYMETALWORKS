@@ -23,23 +23,20 @@ const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20 MB
    localhost:3000. In production REACT_APP_WEBSITE_URL should be
    set to the live domain so they resolve correctly.
 ─────────────────────────────────────────────────────────────── */
-const WEBSITE_URL = (process.env.REACT_APP_WEBSITE_URL || '').replace(/\/$/, '');
+const DEFAULT_WEBSITE_URL = 'https://www.vijaymetalworks.com';
+const WEBSITE_URL = (process.env.REACT_APP_WEBSITE_URL || DEFAULT_WEBSITE_URL).replace(/\/$/, '');
 
 const resolveImg = (url) => {
   if (!url) return '';
   
-  // Already absolute (Supabase storage URL or external)
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:')) {
+  // Already absolute (Supabase storage URL, external, data or blob URI)
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:') || url.startsWith('blob:')) {
     return url;
   }
   
   // Relative path — prefix with website origin
-  if (!WEBSITE_URL) {
-    console.error('❌ REACT_APP_WEBSITE_URL not set! Cannot resolve relative paths.');
-    return url;
-  }
-  
-  return WEBSITE_URL + url;
+  const baseUrl = WEBSITE_URL || DEFAULT_WEBSITE_URL;
+  return baseUrl + (url.startsWith('/') ? url : `/${url}`);
 };
 
 const getSessionToken = () => {
@@ -144,14 +141,55 @@ const injectAdminCSS = () => {
   const s = document.createElement('style');
   s.id = 'vmw-admin-css';
   s.textContent = `
+    :root {
+      --sat: env(safe-area-inset-top, 0px);
+      --sab: env(safe-area-inset-bottom, 0px);
+      --sal: env(safe-area-inset-left, 0px);
+      --sar: env(safe-area-inset-right, 0px);
+
+      /* VMW Dark Glass Design Tokens */
+      --glass-bg: rgba(22, 17, 13, 0.65);
+      --glass-bg-card: rgba(24, 18, 14, 0.62);
+      --glass-bg-header: rgba(14, 11, 9, 0.85);
+      --glass-bg-dock: rgba(16, 12, 10, 0.88);
+      --glass-bg-sheet: rgba(18, 14, 11, 0.94);
+      --glass-bg-drawer: rgba(14, 11, 9, 0.94);
+      --glass-bg-input: rgba(255, 255, 255, 0.04);
+      --glass-bg-btn: rgba(255, 255, 255, 0.06);
+      --glass-bg-btn-gold: rgba(255, 215, 0, 0.12);
+      
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --glass-border-gold: rgba(255, 215, 0, 0.22);
+      --glass-border-gold-subtle: rgba(255, 215, 0, 0.12);
+      --glass-border-highlight: rgba(255, 255, 255, 0.14);
+      
+      --glass-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+      --glass-highlight-gold: inset 0 1px 0 rgba(255, 215, 0, 0.2);
+      
+      --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+      --glass-shadow-dock: 0 12px 40px rgba(0, 0, 0, 0.6);
+      --glass-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.55);
+      
+      --glass-blur: blur(20px);
+      --glass-blur-sm: blur(12px);
+      --glass-blur-heavy: blur(28px);
+      
+      --vmw-gold: #FFD700;
+      --vmw-gold-glow: rgba(255, 215, 0, 0.25);
+    }
     *,*::before,*::after{box-sizing:border-box}
     html,body{margin:0;padding:0;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
     body{
-      background:#0a0806;
-      background:linear-gradient(135deg, #0a0806 0%, #151210 100%);
+      background:#080605;
+      background-image:
+        radial-gradient(circle at 15% 15%, rgba(255, 215, 0, 0.035) 0%, transparent 45%),
+        radial-gradient(circle at 85% 80%, rgba(255, 180, 0, 0.025) 0%, transparent 50%),
+        linear-gradient(180deg, #0a0806 0%, #120e0b 50%, #080605 100%);
+      background-attachment:fixed;
       color:rgba(255,255,255,0.95);
       font-family:'Jost',sans-serif;
       min-height:100vh;
+      min-height:100dvh;
     }
     
     /* Smooth scrollbar */
@@ -169,46 +207,138 @@ const injectAdminCSS = () => {
       position:relative;
       overflow:hidden;
     }
-    .vmw-btn::before{
-      content:'';
-      position:absolute;
-      top:50%;
-      left:50%;
-      width:0;
-      height:0;
-      border-radius:50%;
-      background:rgba(255,255,255,0.1);
-      transform:translate(-50%, -50%);
-      transition:width 0.6s, height 0.6s;
-    }
-    .vmw-btn:hover::before{
-      width:300px;
-      height:300px;
-    }
     .vmw-btn:hover{
       transform:translateY(-1px);
       box-shadow:0 4px 12px rgba(0,0,0,0.3);
     }
     .vmw-btn:active{
-      transform:translateY(0);
+      transform:scale(0.97);
     }
 
-    /* Card hover effects */
-    .vmw-card{
-      transition:all 0.3s ease;
+    /* Glass Surface Classes */
+    .glass-surface{
+      background:var(--glass-bg-card);
+      backdrop-filter:var(--glass-blur);
+      -webkit-backdrop-filter:var(--glass-blur);
+      border:1px solid var(--glass-border);
+      box-shadow:var(--glass-shadow), var(--glass-highlight);
+      border-radius:20px;
     }
-    .vmw-card:hover{
-      transform:translateY(-2px);
-      box-shadow:0 8px 24px rgba(0,0,0,0.4);
+    .glass-card{
+      background:linear-gradient(135deg, rgba(28, 22, 17, 0.70) 0%, rgba(18, 14, 11, 0.55) 100%);
+      backdrop-filter:var(--glass-blur);
+      -webkit-backdrop-filter:var(--glass-blur);
+      border:1px solid var(--glass-border-gold-subtle);
+      box-shadow:var(--glass-shadow), var(--glass-highlight);
+      border-radius:20px;
+      position:relative;
+      overflow:hidden;
+      transition:transform 0.2s ease, border-color 0.2s ease;
     }
-
-    /* Gold glow effect */
-    .vmw-glow-gold{
-      box-shadow:0 0 20px rgba(255,215,0,0.2);
+    .glass-btn{
+      background:var(--glass-bg-btn);
+      backdrop-filter:var(--glass-blur-sm);
+      -webkit-backdrop-filter:var(--glass-blur-sm);
+      border:1px solid var(--glass-border);
+      box-shadow:var(--glass-highlight);
+      border-radius:12px;
+      color:rgba(255, 255, 255, 0.9);
+      transition:all 0.2s ease;
+      cursor:pointer;
+    }
+    .glass-btn:active{
+      transform:scale(0.96);
+      background:rgba(255, 255, 255, 0.1);
+    }
+    .glass-btn-gold{
+      background:var(--glass-bg-btn-gold);
+      border:1px solid var(--glass-border-gold);
+      color:var(--vmw-gold);
+      box-shadow:var(--glass-highlight-gold), 0 0 14px rgba(255, 215, 0, 0.08);
+    }
+    .glass-btn-gold:active{
+      background:rgba(255, 215, 0, 0.2);
+    }
+    .glass-btn-danger{
+      background:rgba(255, 77, 77, 0.1);
+      border:1px solid rgba(255, 77, 77, 0.3);
+      color:#ff4d4d;
+      backdrop-filter:var(--glass-blur-sm);
+      -webkit-backdrop-filter:var(--glass-blur-sm);
+      transition:all 0.2s ease;
+    }
+    .glass-btn-danger:active{
+      background:rgba(255, 77, 77, 0.2);
+      transform:scale(0.97);
+    }
+    .glass-pill{
+      background:rgba(255, 255, 255, 0.05);
+      backdrop-filter:var(--glass-blur-sm);
+      -webkit-backdrop-filter:var(--glass-blur-sm);
+      border:1px solid var(--glass-border);
+      box-shadow:var(--glass-highlight);
+      border-radius:20px;
     }
 
     /* Sidebar — desktop sticky */
     .vmw-sidebar{width:240px;flex-shrink:0;transition:transform 0.3s ease}
+
+    /* Mobile Floating Glass Header */
+    .mobile-header{
+      position:fixed;
+      top:0;
+      left:0;
+      right:0;
+      padding-top:env(safe-area-inset-top, 0px);
+      background:var(--glass-bg-header);
+      backdrop-filter:var(--glass-blur);
+      -webkit-backdrop-filter:var(--glass-blur);
+      border-bottom:1px solid var(--glass-border-gold-subtle);
+      z-index:100;
+      box-shadow:0 8px 30px rgba(0,0,0,0.45), var(--glass-highlight);
+      border-radius:0 0 20px 20px;
+    }
+    .mobile-header-inner{
+      height:56px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding-left:max(14px, env(safe-area-inset-left, 0px));
+      padding-right:max(14px, env(safe-area-inset-right, 0px));
+      box-sizing:border-box;
+    }
+
+    /* Mobile Floating Glass Bottom Dock */
+    .mobile-bottom-nav{
+      position:fixed;
+      bottom:0;
+      left:0;
+      right:0;
+      padding-bottom:max(8px, env(safe-area-inset-bottom, 0px));
+      padding-left:max(12px, env(safe-area-inset-left, 0px));
+      padding-right:max(12px, env(safe-area-inset-right, 0px));
+      pointer-events:none;
+      z-index:100;
+    }
+    .mobile-bottom-nav-inner{
+      pointer-events:auto;
+      height:62px;
+      background:var(--glass-bg-dock);
+      backdrop-filter:var(--glass-blur);
+      -webkit-backdrop-filter:var(--glass-blur);
+      border:1px solid var(--glass-border-gold);
+      border-radius:24px;
+      box-shadow:var(--glass-shadow-dock), var(--glass-highlight);
+      display:flex;
+      align-items:center;
+      justify-content:space-around;
+      padding:0 6px;
+      box-sizing:border-box;
+    }
+
+    @media(min-width:769px){
+      .mobile-header, .mobile-bottom-nav{display:none!important}
+    }
 
     /* Tablet (768px – 1024px): narrower sidebar */
     @media(max-width:1024px) and (min-width:768px){
@@ -219,23 +349,42 @@ const injectAdminCSS = () => {
       .vmw-analytics-row{grid-template-columns:1fr!important}
     }
 
-    /* Mobile (≤767px): off-canvas sidebar */
-    @media(max-width:767px){
-      .vmw-sidebar{position:fixed;top:0;left:0;height:100dvh;height:100vh;z-index:300;transform:translateX(-100%);width:280px}
+    /* Mobile (≤768px): mobile navigation and safe-area support */
+    @media(max-width:768px){
+      .vmw-sidebar{
+        position:fixed;top:0;left:0;
+        height:100dvh;height:100vh;
+        z-index:300;transform:translateX(-100%);
+        width:290px;
+        padding-top:env(safe-area-inset-top, 0px);
+        padding-bottom:env(safe-area-inset-bottom, 0px);
+        background:var(--glass-bg-drawer)!important;
+        backdrop-filter:var(--glass-blur-heavy)!important;
+        -webkit-backdrop-filter:var(--glass-blur-heavy)!important;
+        border-right:1px solid var(--glass-border-gold)!important;
+        border-radius:0 24px 24px 0;
+        box-shadow:8px 0 36px rgba(0,0,0,0.7)!important;
+      }
       .vmw-sidebar.open{transform:translateX(0)}
-      .vmw-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(4px);z-index:299;display:none}
+      .vmw-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.8);backdrop-filter:blur(8px);z-index:299;display:none}
       .vmw-overlay.open{display:block}
-      .vmw-main-content{padding:20px 16px!important;max-width:100vw!important}
+      .vmw-main-content{
+        padding-top:calc(56px + env(safe-area-inset-top, 0px) + 16px)!important;
+        padding-bottom:calc(74px + env(safe-area-inset-bottom, 0px) + 20px)!important;
+        padding-left:calc(14px + env(safe-area-inset-left, 0px))!important;
+        padding-right:calc(14px + env(safe-area-inset-right, 0px))!important;
+        max-width:100vw!important;
+      }
       .vmw-stat-grid{grid-template-columns:repeat(2,1fr)!important;gap:12px!important}
       .vmw-gallery-grid{grid-template-columns:repeat(2,1fr)!important;gap:12px!important}
       .vmw-upload-fields{grid-template-columns:1fr!important}
       .vmw-edit-2col{grid-template-columns:1fr!important}
       .vmw-inquiries-meta{grid-template-columns:1fr 1fr!important}
-      .vmw-chart{height:90px!important}
+      .vmw-chart{height:110px!important}
       .vmw-analytics-row{grid-template-columns:1fr!important}
       .vmw-page-header{flex-direction:column;align-items:flex-start!important;gap:12px!important}
-      .vmw-modal-inner{padding:20px!important;max-width:calc(100vw - 32px)!important;width:calc(100vw - 32px)!important}
-      .vmw-site-images-grid{grid-template-columns:repeat(2,1fr)!important}
+      .vmw-modal-inner{padding:18px!important;max-width:calc(100vw - 24px)!important;width:calc(100vw - 24px)!important}
+      .vmw-site-images-grid{grid-template-columns:repeat(2,1fr)!important;gap:12px!important}
     }
 
     /* Small mobile (≤420px) */
@@ -386,75 +535,95 @@ const useToast = () => {
   return { show, Toast };
 };
 
-/* ── Enhanced Stat Card with better visuals ─────────────────── */
+/* ── Enhanced Glassmorphic Stat Card ────────────────────────── */
 const StatCard = ({ icon, label, value, sub, accent, color }) => (
   <motion.div
-    initial={{ opacity: 0, y: 20 }}
+    initial={{ opacity: 0, y: 16 }}
     animate={{ opacity: 1, y: 0 }}
-    whileHover={{ y: -4 }}
-    className="vmw-card"
+    whileHover={{ y: -3 }}
+    className="glass-card"
     style={{
-      background: accent ? `linear-gradient(135deg, ${C.surface} 0%, ${C.goldFaint} 100%)` : C.surface,
-      border: `1px solid ${accent ? C.borderGoldBright : C.border}`,
-      borderRadius: 18,
-      padding: '24px 22px',
+      padding: '20px 18px',
       position: 'relative',
-      overflow: 'hidden',
-      boxShadow: accent ? C.shadowGold : C.shadowSm,
+      borderRadius: 20,
+      border: `1px solid ${accent ? 'rgba(255, 215, 0, 0.28)' : 'rgba(255, 255, 255, 0.08)'}`,
+      background: accent
+        ? 'linear-gradient(145deg, rgba(35, 28, 20, 0.72) 0%, rgba(20, 16, 12, 0.58) 100%)'
+        : 'linear-gradient(145deg, rgba(26, 21, 17, 0.68) 0%, rgba(16, 13, 10, 0.52) 100%)',
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+      boxShadow: accent
+        ? '0 10px 32px rgba(0,0,0,0.4), 0 0 16px rgba(255,215,0,0.08), inset 0 1px 0 rgba(255,255,255,0.08)'
+        : '0 8px 28px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)',
     }}>
-    {/* Top accent line */}
+    {/* Subtle top gold reflection line */}
     {accent && (
       <div style={{
         position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        height: 3,
+        top: 0, left: 0, right: 0,
+        height: 2,
         background: `linear-gradient(90deg, transparent, ${C.gold}, transparent)`,
         boxShadow: `0 0 10px ${C.goldGlow}`,
       }} />
     )}
-    
-    {/* Background pattern */}
+
+    {/* Background ambient radial glow */}
     <div style={{
       position: 'absolute',
-      top: -20,
-      right: -20,
-      width: 100,
-      height: 100,
-      background: `radial-gradient(circle, ${accent ? C.goldFaint : C.fainter} 0%, transparent 70%)`,
-      opacity: 0.3,
+      top: -15, right: -15,
+      width: 80, height: 80,
+      background: `radial-gradient(circle, ${accent ? 'rgba(255,215,0,0.12)' : 'rgba(255,255,255,0.03)'} 0%, transparent 70%)`,
       pointerEvents: 'none',
     }} />
 
-    <div style={{ fontSize: 28, marginBottom: 12, position: 'relative' }}>{icon}</div>
     <div style={{
-      ...ff.body,
-      fontSize: 11,
-      color: accent ? C.goldDim : C.dim,
-      textTransform: 'uppercase',
-      letterSpacing: '0.1em',
-      marginBottom: 6,
-      fontWeight: 600,
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginBottom: 10,
     }}>
-      {label}
+      <div style={{
+        ...ff.body,
+        fontSize: 11,
+        color: accent ? C.goldDim : C.dim,
+        textTransform: 'uppercase',
+        letterSpacing: '0.08em',
+        fontWeight: 600,
+      }}>
+        {label}
+      </div>
+      <div style={{
+        fontSize: 20,
+        width: 34,
+        height: 34,
+        borderRadius: 10,
+        background: accent ? 'rgba(255,215,0,0.1)' : 'rgba(255,255,255,0.04)',
+        border: `1px solid ${accent ? 'rgba(255,215,0,0.2)' : 'rgba(255,255,255,0.06)'}`,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}>{icon}</div>
     </div>
+
     <div style={{
       ...ff.display,
-      fontSize: 36,
+      fontSize: 32,
       color: color || (accent ? C.gold : C.text),
       lineHeight: 1,
       fontWeight: 700,
-      textShadow: accent ? `0 0 20px ${C.goldGlow}` : 'none',
+      textShadow: accent ? `0 0 18px ${C.goldGlow}` : 'none',
+      letterSpacing: '0.02em',
     }}>
       {value}
     </div>
+
     {sub && (
       <div style={{
         ...ff.body,
         fontSize: 11,
         color: C.faint,
         marginTop: 8,
+        lineHeight: 1.3,
       }}>
         {sub}
       </div>
@@ -3266,19 +3435,68 @@ const DashboardTab = () => {
         <StatCard icon="📅" label="Today"            value={loading ? '—' : stats.todayVisitors} sub="Visits today"  color={C.green} />
       </div>
       {recentInquiries.length > 0 && (
-        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 16, padding: 22 }}>
-          <h4 style={{ ...ff.display, fontSize: 17, color: C.text, margin: '0 0 18px' }}>Recent Inquiries</h4>
-          {recentInquiries.map(iq => (
-            <div key={iq.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-              padding: '11px 0', borderBottom: `1px solid ${C.border}`, flexWrap: 'wrap', gap: 8 }}>
-              <div>
-                <div style={{ ...ff.body, fontSize: 14, color: C.text, fontWeight: 600 }}>{iq.full_name || 'Unknown'}</div>
-                <div style={{ ...ff.body, fontSize: 12, color: C.dim }}>{iq.phone}{iq.artwork_type ? ` · ${iq.artwork_type}` : ''}</div>
+        <div className="glass-card" style={{
+          background: 'linear-gradient(145deg, rgba(24, 19, 15, 0.72) 0%, rgba(15, 12, 9, 0.60) 100%)',
+          backdropFilter: 'blur(20px)',
+          WebkitBackdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255, 215, 0, 0.16)',
+          borderRadius: 22,
+          padding: '20px 22px',
+          boxShadow: '0 10px 36px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.06)',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <h4 style={{ ...ff.display, fontSize: 16, color: C.text, margin: 0, letterSpacing: '0.03em' }}>
+              Recent Inquiries
+            </h4>
+            <span style={{
+              ...ff.body,
+              fontSize: 10.5,
+              color: C.gold,
+              padding: '3px 9px',
+              borderRadius: 12,
+              background: 'rgba(255,215,0,0.08)',
+              border: '1px solid rgba(255,215,0,0.2)',
+              fontWeight: 600,
+              letterSpacing: '0.04em',
+            }}>
+              LIVE FEED
+            </span>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {recentInquiries.map(iq => (
+              <div key={iq.id} style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '12px 14px',
+                borderRadius: 14,
+                background: 'rgba(255,255,255,0.03)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+                flexWrap: 'wrap',
+                gap: 8,
+              }}>
+                <div>
+                  <div style={{ ...ff.body, fontSize: 14, color: C.text, fontWeight: 600 }}>{iq.full_name || 'Unknown'}</div>
+                  <div style={{ ...ff.body, fontSize: 11.5, color: C.dim, marginTop: 2 }}>{iq.phone}{iq.artwork_type ? ` · ${iq.artwork_type}` : ''}</div>
+                </div>
+                <div style={{
+                  ...ff.body,
+                  fontSize: 10.5,
+                  padding: '3px 10px',
+                  borderRadius: 16,
+                  background: ['pending', 'new'].includes(iq.status) ? 'rgba(255, 215, 0, 0.12)' : 'rgba(0, 200, 111, 0.12)',
+                  border: `1px solid ${['pending', 'new'].includes(iq.status) ? 'rgba(255, 215, 0, 0.3)' : 'rgba(0, 200, 111, 0.3)'}`,
+                  color: ['pending', 'new'].includes(iq.status) ? C.gold : C.green,
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.06em',
+                  fontWeight: 600,
+                }}>
+                  {iq.status || 'pending'}
+                </div>
               </div>
-              <div style={{ ...ff.body, fontSize: 11, color: iq.status === 'pending' ? C.gold : C.dim,
-                textTransform: 'uppercase', letterSpacing: '0.08em' }}>{iq.status || 'pending'}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       )}
     </div>
@@ -3665,17 +3883,33 @@ const SettingsTab = () => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   DASHBOARD SHELL — Mobile-responsive sidebar + hamburger
+   DASHBOARD SHELL — Desktop Sidebar + Mobile Top/Bottom Navigation
 ═══════════════════════════════════════════════════════════════ */
 const Dashboard = ({ user, onLogout }) => {
   const [activeTab, setSidebar_active] = useState('Dashboard');
   const [sidebarOpen, setSidebarOpen]  = useState(false);
+  const [moreOpen, setMoreOpen]        = useState(false);
   const isMobile = useIsMobile();
 
   const setActiveTab = (tab) => {
     setSidebar_active(tab);
-    if (isMobile) setSidebarOpen(false);
+    if (isMobile) {
+      setSidebarOpen(false);
+      setMoreOpen(false);
+    }
   };
+
+  // Keyboard / Back navigation listener
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        if (sidebarOpen) setSidebarOpen(false);
+        if (moreOpen) setMoreOpen(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [sidebarOpen, moreOpen]);
 
   const tabs = [
     { id: 'Dashboard',   icon: '📊', label: 'Dashboard' },
@@ -3686,6 +3920,22 @@ const Dashboard = ({ user, onLogout }) => {
     { id: 'Inquiries',   icon: '💬', label: 'Inquiries' },
     { id: 'Settings',    icon: '⚙️', label: 'Settings' },
   ];
+
+  const bottomNavItems = [
+    { id: 'Dashboard', icon: '📊', label: 'Dashboard' },
+    { id: 'Gallery',   icon: '🖼️', label: 'Gallery' },
+    { id: 'Visitors',  icon: '👥', label: 'Visitors' },
+    { id: 'More',      icon: '⋯',  label: 'More' },
+  ];
+
+  const moreItems = [
+    { id: 'SiteImages', icon: '🌐', label: 'Site Images', desc: 'Hero & section photos' },
+    { id: 'Reviews',    icon: '⭐', label: 'Client Reviews', desc: 'Moderate patron reviews' },
+    { id: 'Inquiries',  icon: '💬', label: 'Inquiries', desc: 'Customer commissions' },
+    { id: 'Settings',   icon: '⚙️', label: 'Settings', desc: 'System & connection' },
+  ];
+
+  const isMoreActive = moreItems.some(item => item.id === activeTab);
 
   const renderTab = () => {
     switch (activeTab) {
@@ -3702,42 +3952,103 @@ const Dashboard = ({ user, onLogout }) => {
 
   const SidebarContent = () => (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-      <div style={{ padding: '24px 20px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div style={{
+        padding: '24px 20px',
+        borderBottom: '1px solid rgba(255, 215, 0, 0.14)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background: 'rgba(255,255,255,0.02)',
+      }}>
         <div>
-          <div style={{ fontSize: 22, marginBottom: 4 }}>⚒️</div>
-          <h2 style={{ ...ff.display, color: C.gold, margin: 0, fontSize: 16, letterSpacing: '0.04em' }}>Studio Admin</h2>
+          <div style={{ fontSize: 24, marginBottom: 4, filter: 'drop-shadow(0 0 10px rgba(255,215,0,0.3))' }}>⚒️</div>
+          <h2 style={{ ...ff.display, color: C.gold, margin: 0, fontSize: 16.5, letterSpacing: '0.05em' }}>Studio Admin</h2>
           <div style={{ ...ff.body, fontSize: 11, color: C.dim, marginTop: 2 }}>Vijay Metal Works</div>
         </div>
         {isMobile && (
-          <button onClick={() => setSidebarOpen(false)}
-            style={{ background: 'transparent', border: 'none', color: C.dim, fontSize: 22, cursor: 'pointer', padding: 4 }}>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            aria-label="Close navigation menu"
+            className="glass-btn"
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 11,
+              background: 'rgba(255,255,255,0.06)',
+              border: '1px solid rgba(255,255,255,0.1)',
+              color: C.dim,
+              fontSize: 16,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
             ✕
           </button>
         )}
       </div>
-      <nav style={{ flex: 1, padding: '16px 10px', display: 'flex', flexDirection: 'column', gap: 3, overflowY: 'auto' }}>
+      <nav style={{ flex: 1, padding: '16px 12px', display: 'flex', flexDirection: 'column', gap: 6, overflowY: 'auto' }}>
         {tabs.map(tab => (
-          <button key={tab.id} onClick={() => setActiveTab(tab.id)} className="vmw-btn"
-            style={{ width: '100%', textAlign: 'left', padding: '11px 14px',
-              background: activeTab === tab.id ? 'rgba(255,215,0,0.1)' : 'transparent',
-              border: `1px solid ${activeTab === tab.id ? C.borderGold : 'transparent'}`,
-              borderRadius: 10, color: activeTab === tab.id ? C.gold : C.dim,
-              ...ff.body, fontSize: 14, fontWeight: activeTab === tab.id ? 600 : 400,
-              cursor: 'pointer', transition: 'all 0.2s',
-              display: 'flex', alignItems: 'center', gap: 10 }}>
-            <span style={{ fontSize: 16 }}>{tab.icon}</span>
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            style={{
+              width: '100%',
+              textAlign: 'left',
+              padding: '12px 14px',
+              background: activeTab === tab.id
+                ? 'linear-gradient(135deg, rgba(255,215,0,0.14) 0%, rgba(255,215,0,0.05) 100%)'
+                : 'transparent',
+              border: `1px solid ${activeTab === tab.id ? 'rgba(255, 215, 0, 0.28)' : 'transparent'}`,
+              borderRadius: 12,
+              color: activeTab === tab.id ? C.gold : C.dim,
+              ...ff.body,
+              fontSize: 14,
+              fontWeight: activeTab === tab.id ? 600 : 400,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 10,
+              boxShadow: activeTab === tab.id ? 'inset 0 1px 0 rgba(255,215,0,0.15), 0 4px 14px rgba(0,0,0,0.2)' : 'none',
+            }}
+          >
+            <span style={{ fontSize: 17 }}>{tab.icon}</span>
             {tab.label}
           </button>
         ))}
       </nav>
-      <div style={{ padding: '14px 10px', borderTop: `1px solid ${C.border}` }}>
-        <div style={{ ...ff.body, fontSize: 11, color: C.faint, padding: '0 6px 10px', wordBreak: 'break-all' }}>
-          {user?.email}
+      <div style={{
+        padding: '16px 14px',
+        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+        background: 'rgba(0,0,0,0.2)',
+      }}>
+        <div style={{
+          ...ff.body,
+          fontSize: 11,
+          color: C.faint,
+          padding: '0 6px 12px',
+          wordBreak: 'break-all',
+        }}>
+          Signed in: <strong style={{ color: C.dim }}>{user?.email}</strong>
         </div>
-        <button onClick={onLogout} className="vmw-btn"
-          style={{ width: '100%', textAlign: 'left', padding: '10px 14px', background: 'transparent',
-            border: 'none', color: C.red, ...ff.body, fontSize: 14, cursor: 'pointer',
-            borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button
+          onClick={onLogout}
+          className="glass-btn-danger"
+          style={{
+            width: '100%',
+            textAlign: 'left',
+            padding: '11px 14px',
+            ...ff.body,
+            fontSize: 13.5,
+            cursor: 'pointer',
+            borderRadius: 12,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+          }}
+        >
           <span>🚪</span> Sign Out
         </button>
       </div>
@@ -3746,13 +4057,13 @@ const Dashboard = ({ user, onLogout }) => {
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: C.bg, color: C.text }}>
-      {/* Mobile overlay */}
+      {/* ── Mobile Sidebar Overlay ── */}
       {isMobile && (
         <div className={`vmw-overlay ${sidebarOpen ? 'open' : ''}`}
           onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Sidebar */}
+      {/* ── Desktop Sidebar & Mobile Slide Drawer ── */}
       <div className={`vmw-sidebar ${sidebarOpen ? 'open' : ''}`}
         style={{ background: C.bg2, borderRight: `1px solid ${C.border}`,
           flexShrink: 0,
@@ -3761,42 +4072,331 @@ const Dashboard = ({ user, onLogout }) => {
         <SidebarContent />
       </div>
 
-      {/* Main Content */}
+      {/* ── Main Content Area ── */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-        {/* Mobile top bar */}
+        {/* ── Mobile Top Sticky Bar ── */}
         {isMobile && (
-          <div style={{ padding: '14px 16px', borderBottom: `1px solid ${C.border}`,
-            display: 'flex', alignItems: 'center', gap: 14, background: C.bg2, flexShrink: 0 }}>
-            <button onClick={() => setSidebarOpen(true)}
-              style={{ background: 'transparent', border: `1px solid ${C.border}`, color: C.text,
-                fontSize: 18, padding: '6px 10px', borderRadius: 8, cursor: 'pointer', lineHeight: 1 }}>
-              ☰
-            </button>
-            <div>
-              <div style={{ ...ff.display, color: C.gold, fontSize: 14 }}>Studio Admin</div>
-              <div style={{ ...ff.body, fontSize: 11, color: C.dim }}>
-                {tabs.find(t => t.id === activeTab)?.icon} {activeTab}
+          <header className="mobile-header">
+            <div className="mobile-header-inner">
+              <button
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open Navigation Menu"
+                className="glass-btn"
+                style={{
+                  width: 48,
+                  height: 48,
+                  minWidth: 48,
+                  minHeight: 48,
+                  borderRadius: 14,
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  border: '1px solid rgba(255, 215, 0, 0.18)',
+                  color: C.gold,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 20,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  padding: 0,
+                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 12px rgba(0,0,0,0.3)',
+                }}
+              >
+                ☰
+              </button>
+
+              <div style={{ textAlign: 'center', flex: 1, padding: '0 10px', overflow: 'hidden' }}>
+                <div style={{
+                  ...ff.display,
+                  fontSize: 14.5,
+                  fontWeight: 700,
+                  letterSpacing: '0.07em',
+                  background: `linear-gradient(135deg, ${C.gold} 0%, #FFE066 60%, #FFC700 100%)`,
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  whiteSpace: 'nowrap',
+                  filter: 'drop-shadow(0 0 8px rgba(255,215,0,0.25))',
+                }}>
+                  <span>⚒️</span> VMW ADMIN
+                </div>
+                <div style={{
+                  ...ff.body,
+                  fontSize: 10.5,
+                  color: C.dim,
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}>
+                  {tabs.find(t => t.id === activeTab)?.icon} {tabs.find(t => t.id === activeTab)?.label || activeTab}
+                </div>
+              </div>
+
+              <div className="glass-pill" style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 11px',
+                minHeight: 32,
+                borderRadius: 20,
+                background: 'rgba(0, 200, 100, 0.12)',
+                border: '1px solid rgba(0, 200, 100, 0.28)',
+                fontSize: 10.5,
+                color: '#4ADE80',
+                ...ff.body,
+                fontWeight: 600,
+                flexShrink: 0,
+                boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 2px 8px rgba(0,0,0,0.2)',
+              }}>
+                <span style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: '50%',
+                  background: '#4ADE80',
+                  display: 'inline-block',
+                  boxShadow: '0 0 6px #4ADE80',
+                }} />
+                <span>LIVE</span>
               </div>
             </div>
-          </div>
+          </header>
         )}
 
-        <div className="vmw-main-content" style={{ flex: 1, padding: isMobile ? '16px 14px' : '36px 44px',
+        {/* ── Scrollable Tab Content ── */}
+        <main className="vmw-main-content" style={{ flex: 1,
           overflowY: 'auto', overflowX: 'hidden',
-          maxWidth: isMobile ? '100vw' : `calc(100vw - 220px)`,
+          maxWidth: isMobile ? '100vw' : `calc(100vw - 240px)`,
           minWidth: 0, boxSizing: 'border-box' }}>
           <AnimatePresence mode="wait">
-            <motion.div key={activeTab} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }} transition={{ duration: 0.22 }}>
+            <motion.div key={activeTab} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }} transition={{ duration: 0.2 }}>
               {!isMobile && (
                 <h1 style={{ ...ff.display, fontSize: 26, color: C.text, margin: '0 0 28px' }}>
-                  {tabs.find(t => t.id === activeTab)?.icon} {activeTab}
+                  {tabs.find(t => t.id === activeTab)?.icon} {tabs.find(t => t.id === activeTab)?.label}
                 </h1>
               )}
               {renderTab()}
             </motion.div>
           </AnimatePresence>
-        </div>
+        </main>
+
+        {/* ── Mobile Bottom Navigation Bar (Floating Dock) ── */}
+        {isMobile && (
+          <nav className="mobile-bottom-nav">
+            <div className="mobile-bottom-nav-inner">
+              {bottomNavItems.map(item => {
+                const isSelected = item.id === 'More' ? isMoreActive || moreOpen : activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => {
+                      if (item.id === 'More') {
+                        setMoreOpen(prev => !prev);
+                      } else {
+                        setActiveTab(item.id);
+                        setMoreOpen(false);
+                      }
+                    }}
+                    style={{
+                      flex: 1,
+                      height: 50,
+                      minHeight: 48,
+                      minWidth: 48,
+                      background: isSelected ? 'rgba(255, 215, 0, 0.09)' : 'transparent',
+                      border: isSelected ? '1px solid rgba(255, 215, 0, 0.22)' : '1px solid transparent',
+                      borderRadius: 16,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 2,
+                      cursor: 'pointer',
+                      color: isSelected ? C.gold : 'rgba(255, 255, 255, 0.55)',
+                      position: 'relative',
+                      padding: '4px 0',
+                      transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                      boxShadow: isSelected ? 'inset 0 1px 0 rgba(255,255,255,0.1), 0 2px 10px rgba(0,0,0,0.3)' : 'none',
+                    }}
+                  >
+                    {isSelected && (
+                      <div style={{
+                        position: 'absolute',
+                        top: 4,
+                        width: 14,
+                        height: 2,
+                        background: C.gold,
+                        borderRadius: 2,
+                        boxShadow: `0 0 6px ${C.gold}`,
+                      }} />
+                    )}
+                    <span style={{
+                      fontSize: 17,
+                      transform: isSelected ? 'scale(1.08)' : 'scale(1)',
+                      transition: 'transform 0.2s ease',
+                      filter: isSelected ? 'drop-shadow(0 0 6px rgba(255,215,0,0.3))' : 'none',
+                    }}>
+                      {item.icon}
+                    </span>
+                    <span style={{
+                      ...ff.body,
+                      fontSize: 10.5,
+                      fontWeight: isSelected ? 600 : 400,
+                      letterSpacing: '0.02em',
+                    }}>
+                      {item.label}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        )}
+
+        {/* ── Mobile More Bottom Sheet ── */}
+        <AnimatePresence>
+          {isMobile && moreOpen && (
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setMoreOpen(false)}
+                style={{
+                  position: 'fixed',
+                  inset: 0,
+                  background: 'rgba(0,0,0,0.78)',
+                  backdropFilter: 'blur(8px)',
+                  WebkitBackdropFilter: 'blur(8px)',
+                  zIndex: 200,
+                }}
+              />
+              <motion.div
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 28, stiffness: 320 }}
+                style={{
+                  position: 'fixed',
+                  bottom: 0, left: 0, right: 0,
+                  background: 'rgba(18, 14, 11, 0.94)',
+                  backdropFilter: 'blur(28px)',
+                  WebkitBackdropFilter: 'blur(28px)',
+                  borderTop: '1px solid rgba(255, 215, 0, 0.25)',
+                  borderRadius: '28px 28px 0 0',
+                  padding: '16px 18px calc(24px + env(safe-area-inset-bottom, 0px)) 18px',
+                  zIndex: 201,
+                  boxShadow: '0 -16px 48px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.08)',
+                }}
+              >
+                {/* Drag Handle */}
+                <div style={{
+                  width: 44,
+                  height: 4.5,
+                  borderRadius: 3,
+                  background: 'rgba(255,255,255,0.22)',
+                  margin: '0 auto 16px',
+                  boxShadow: '0 1px 2px rgba(0,0,0,0.4)',
+                }} />
+
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <h3 style={{ ...ff.display, fontSize: 16.5, color: C.gold, margin: 0, letterSpacing: '0.04em' }}>
+                    Operations & Settings
+                  </h3>
+                  <button
+                    onClick={() => setMoreOpen(false)}
+                    aria-label="Close More Menu"
+                    className="glass-btn"
+                    style={{
+                      width: 36,
+                      height: 36,
+                      borderRadius: 10,
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      color: C.dim,
+                      fontSize: 15,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 18 }}>
+                  {moreItems.map(item => {
+                    const isItemActive = activeTab === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setActiveTab(item.id)}
+                        style={{
+                          padding: '14px 13px',
+                          background: isItemActive
+                            ? 'linear-gradient(135deg, rgba(38, 30, 20, 0.8) 0%, rgba(26, 20, 14, 0.7) 100%)'
+                            : 'rgba(255,255,255,0.04)',
+                          backdropFilter: 'blur(12px)',
+                          WebkitBackdropFilter: 'blur(12px)',
+                          border: `1px solid ${isItemActive ? 'rgba(255, 215, 0, 0.35)' : 'rgba(255, 255, 255, 0.08)'}`,
+                          borderRadius: 16,
+                          textAlign: 'left',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 4,
+                          boxShadow: isItemActive
+                            ? '0 6px 20px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,215,0,0.2)'
+                            : 'inset 0 1px 0 rgba(255,255,255,0.04)',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 18 }}>{item.icon}</span>
+                          <span style={{ ...ff.body, fontSize: 13.5, color: isItemActive ? C.gold : C.text, fontWeight: 600 }}>
+                            {item.label}
+                          </span>
+                        </div>
+                        <span style={{ ...ff.body, fontSize: 11, color: C.faint, lineHeight: 1.3 }}>
+                          {item.desc}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 14 }}>
+                  <div style={{ ...ff.body, fontSize: 11, color: C.faint, marginBottom: 10, wordBreak: 'break-all' }}>
+                    Signed in as <strong style={{ color: C.dim }}>{user?.email}</strong>
+                  </div>
+                  <button
+                    onClick={() => { setMoreOpen(false); onLogout(); }}
+                    className="glass-btn-danger"
+                    style={{
+                      width: '100%',
+                      padding: '13px 16px',
+                      borderRadius: 14,
+                      ...ff.body,
+                      fontSize: 14,
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 8,
+                      boxShadow: '0 4px 16px rgba(255, 77, 77, 0.15)',
+                    }}
+                  >
+                    <span>🚪</span> Sign Out
+                  </button>
+                </div>
+              </motion.div>
+            </>
+          )}
+        </AnimatePresence>
       </div>
     </div>
   );

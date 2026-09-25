@@ -1,0 +1,6 @@
+{
+  "appId": "com.vijaymetalworks.admin",
+  "appName": "VMW Admin",
+  "webDir": "build",
+  "bundledWebRuntime": false
+}
